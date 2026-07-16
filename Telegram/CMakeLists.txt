@@ -3,10 +3,8 @@
 #
 # For license and copyright information please follow this link:
 # https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
-
 add_executable(Telegram WIN32 MACOSX_BUNDLE)
 init_non_host_target(Telegram)
-
 add_subdirectory(lib_rpl)
 add_subdirectory(lib_crl)
 add_subdirectory(lib_base)
@@ -20,10 +18,8 @@ add_subdirectory(lib_translate)
 add_subdirectory(lib_webrtc)
 add_subdirectory(lib_webview)
 add_subdirectory(codegen)
-
 get_filename_component(src_loc SourceFiles REALPATH)
 get_filename_component(res_loc Resources REALPATH)
-
 include(cmake/telegram_options.cmake)
 include(cmake/lib_ffmpeg.cmake)
 include(cmake/lib_stripe.cmake)
@@ -38,11 +34,9 @@ include(cmake/td_tde2e.cmake)
 include(cmake/td_ui.cmake)
 include(cmake/telegram_apple_swift_runtime.cmake)
 include(cmake/generate_appstream_changelog.cmake)
-
 if (DESKTOP_APP_TEST_APPS)
     include(cmake/tests.cmake)
 endif()
-
 if (WIN32)
     include(cmake/generate_midl.cmake)
     generate_midl(Telegram ${src_loc}
@@ -50,9 +44,7 @@ if (WIN32)
         platform/win/windows_toastactivator.idl
     )
 endif()
-
 set_target_properties(Telegram PROPERTIES AUTOMOC ON)
-
 target_link_libraries(Telegram
 PRIVATE
     tdesktop::lib_tgcalls
@@ -89,16 +81,13 @@ PRIVATE
     desktop-app::external_openal
     desktop-app::external_xxhash
 )
-
 if (NOT DESKTOP_APP_DISABLE_SWIFT6)
     telegram_add_apple_swift_runtime(Telegram)
 endif()
-
 target_precompile_headers(Telegram PRIVATE $<$<COMPILE_LANGUAGE:CXX,OBJCXX>:${src_loc}/stdafx.h>)
 nice_target_sources(Telegram ${src_loc}
 PRIVATE
     ${style_files}
-
     api/api_attached_stickers.cpp
     api/api_attached_stickers.h
     api/api_authorizations.cpp
@@ -292,7 +281,9 @@ PRIVATE
     boxes/auto_lock_box.cpp
     boxes/auto_lock_box.h
     boxes/auto_download_box.cpp
-    boxes/auto_download_box.h
+        boxes/auto_download_box.h
+        boxes/download_center_clear_box.cpp
+        boxes/download_center_clear_box.h
     boxes/background_box.cpp
     boxes/background_box.h
     boxes/background_preview_box.cpp
@@ -666,11 +657,13 @@ PRIVATE
     data/data_document_resolver.cpp
     data/data_document_resolver.h
     data/data_download_manager.cpp
-    data/data_download_manager.h
-    data/data_drafts.cpp
-    data/data_drafts.h
-    data/data_emoji_statuses.cpp
-    data/data_emoji_statuses.h
+        data/data_download_manager.h
+        data/data_download_center.cpp
+        data/data_download_center.h
+        data/data_drafts.cpp
+        data/data_drafts.h
+        data/data_emoji_statuses.cpp
+        data/data_emoji_statuses.h
     data/data_folder.cpp
     data/data_folder.h
     data/data_forum.cpp
@@ -1759,6 +1752,8 @@ PRIVATE
     settings/sections/settings_advanced.h
     settings/sections/settings_chat.cpp
     settings/sections/settings_chat.h
+        settings/sections/settings_download_center.cpp
+        settings/sections/settings_download_center.h
     settings/sections/settings_blocked_peers.cpp
     settings/sections/settings_blocked_peers.h
     settings/sections/settings_business.cpp
@@ -1827,8 +1822,10 @@ PRIVATE
     storage/details/storage_settings_scheme.cpp
     storage/details/storage_settings_scheme.h
     storage/download_manager_mtproto.cpp
-    storage/download_manager_mtproto.h
-    storage/file_download.cpp
+        storage/download_manager_mtproto.h
+        storage/parallel_download_controller.cpp
+        storage/parallel_download_controller.h
+        storage/file_download.cpp
     storage/file_download.h
     storage/file_download_mtproto.cpp
     storage/file_download_mtproto.h
@@ -2046,7 +2043,6 @@ PRIVATE
     tray.cpp
     tray.h
 )
-
 if (APPLE)
     nice_target_sources(Telegram ${src_loc}
     PRIVATE
@@ -2060,20 +2056,17 @@ else()
         tray_accounts_menu_dummy.cpp
     )
 endif()
-
 if (NOT build_winstore)
     remove_target_sources(Telegram ${src_loc}
         platform/win/windows_start_task.cpp
         platform/win/windows_start_task.h
     )
 endif()
-
 if (DESKTOP_APP_USE_PACKAGED)
     remove_target_sources(Telegram ${src_loc}
         platform/mac/mac_iconv_helper.c
     )
 endif()
-
 nice_target_sources(Telegram ${res_loc}
 PRIVATE
     qrc/emoji_1.qrc
@@ -2096,17 +2089,14 @@ PRIVATE
     langs/cloud_lang.strings
     numbers.txt
 )
-
 include(cmake/qrhi_shaders.cmake)
 include(cmake/generate_models.cmake)
-
 if (APPLE AND NOT build_macstore)
     nice_target_sources(Telegram ${res_loc}
     PRIVATE
         qrc/telegram/mac_icons.qrc
     )
 endif()
-
 if (WIN32)
     # message(${CMAKE_GENERATOR})
     # mt.exe -manifest "${res_loc}/winrc/Telegram.manifest" "-inputresource:\"$<TARGET_FILE:Telegram>\";#1" "-outputresource:\"$<TARGET_FILE:Telegram>\";#1" >NUL
@@ -2120,17 +2110,14 @@ if (WIN32)
     # COMMENT
     #     $<IF:${release},"Appending compatibility manifest.","Finalizing build.">
     # )
-
     if (QT_VERSION LESS 6)
         target_link_libraries(Telegram PRIVATE desktop-app::win_directx_helper)
     endif()
-
     target_link_options(Telegram PRIVATE /PDBPAGESIZE:8192)
 elseif (APPLE)
     if (NOT DESKTOP_APP_USE_PACKAGED)
         target_link_libraries(Telegram PRIVATE desktop-app::external_iconv)
     endif()
-
     set(icons_path ${CMAKE_CURRENT_SOURCE_DIR}/Telegram/Images.xcassets)
     if (CMAKE_GENERATOR STREQUAL Xcode)
         target_add_resource(Telegram ${icons_path})
@@ -2165,7 +2152,6 @@ elseif (APPLE)
             target_add_resource(Telegram Icon.icns)
         endif()
     endif()
-
     set(lang_packs
         en
         de
@@ -2184,7 +2170,6 @@ elseif (APPLE)
         target_sources(Telegram PRIVATE ${strings_path})
         source_group(TREE ${res_loc} PREFIX Resources FILES ${strings_path})
     endforeach()
-
     add_custom_command(TARGET Telegram
     PRE_LINK
         COMMAND mkdir -p $<TARGET_FILE_DIR:Telegram>/../Resources
@@ -2211,13 +2196,11 @@ else()
     PRIVATE
         qrc/telegram/bot_webview_shell.qrc
     )
-
     include(${cmake_helpers_loc}/external/glib/generate_dbus.cmake)
     generate_dbus(Telegram org.freedesktop.portal. XdpBackground ${third_party_loc}/xdg-desktop-portal/data/org.freedesktop.portal.Background.xml)
     generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
     generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
 endif()
-
 if (build_macstore)
     set(bundle_identifier "org.telegram.desktop")
     set(bundle_entitlements "Telegram Lite.entitlements")
@@ -2244,13 +2227,11 @@ else()
     set(bundle_entitlements "Telegram.entitlements")
     set(output_name "Telegram")
 endif()
-
 if (CMAKE_GENERATOR STREQUAL Xcode)
     set(bundle_identifier_plist "$(PRODUCT_BUNDLE_IDENTIFIER)")
 else()
     set(bundle_identifier_plist ${bundle_identifier})
 endif()
-
 set_target_properties(Telegram PROPERTIES
     OUTPUT_NAME ${output_name}
     MACOSX_BUNDLE_GUI_IDENTIFIER ${bundle_identifier}
@@ -2274,16 +2255,13 @@ set(entitlement_sources
 )
 target_sources(Telegram PRIVATE ${entitlement_sources})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/Telegram PREFIX Resources FILES ${entitlement_sources})
-
 target_include_directories(Telegram PRIVATE ${src_loc})
-
 target_compile_definitions(Telegram
 PRIVATE
     TDESKTOP_API_ID=${TDESKTOP_API_ID}
     TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
     G_LOG_DOMAIN="Telegram"
 )
-
 get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if (APPLE
     OR is_multi_config
@@ -2293,9 +2271,7 @@ if (APPLE
 else()
     set(output_folder ${CMAKE_BINARY_DIR}/bin)
 endif()
-
 set_target_properties(Telegram PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${output_folder})
-
 if (MSVC)
     target_link_libraries(Telegram
     PRIVATE
@@ -2334,7 +2310,6 @@ if (MSVC)
                 /DELAYLOAD:API-MS-Win-EventLog-Legacy-l1-1-0.dll
             )
         endif()
-
         target_link_options(Telegram
         PRIVATE
             /DELAYLOAD:API-MS-Win-Core-Console-l1-1-0.dll
@@ -2366,15 +2341,11 @@ if (MSVC)
         )
     endif()
 endif()
-
 target_prepare_qrc(Telegram)
-
 if (NOT DESKTOP_APP_DISABLE_AUTOUPDATE AND NOT build_macstore AND NOT build_winstore)
     add_executable(Updater WIN32)
     init_non_host_target(Updater)
-
     add_dependencies(Telegram Updater)
-
     nice_target_sources(Updater ${src_loc}
     PRIVATE
         _other/updater_win.cpp
@@ -2382,11 +2353,9 @@ if (NOT DESKTOP_APP_DISABLE_AUTOUPDATE AND NOT build_macstore AND NOT build_wins
         _other/updater_osx.m
         _other/updater.h
     )
-
     set_target_properties(Updater PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${output_folder}
     )
-
     if (WIN32)
         get_filename_component(lib_base_loc lib_base REALPATH)
         nice_target_sources(Updater ${lib_base_loc}
@@ -2418,19 +2387,15 @@ if (NOT DESKTOP_APP_DISABLE_AUTOUPDATE AND NOT build_macstore AND NOT build_wins
             COMMAND cp $<TARGET_FILE:Updater> $<TARGET_FILE_DIR:Telegram>/../Frameworks/
         )
     endif()
-
     if (DESKTOP_APP_SPECIAL_TARGET)
         add_executable(Packer)
         init_target(Packer)
-
         add_dependencies(Telegram Packer)
-
         nice_target_sources(Packer ${src_loc}
         PRIVATE
             _other/packer.cpp
             _other/packer.h
         )
-
         target_link_libraries(Packer
         PRIVATE
             desktop-app::external_qt
@@ -2438,29 +2403,23 @@ if (NOT DESKTOP_APP_DISABLE_AUTOUPDATE AND NOT build_macstore AND NOT build_wins
             desktop-app::external_auto_updates
             desktop-app::external_openssl
         )
-
         if (DESKTOP_APP_USE_PACKAGED)
             target_compile_definitions(Packer PRIVATE PACKER_USE_PACKAGED)
         endif()
-
         set_target_properties(Packer PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${output_folder})
     endif()
 elseif (build_winstore)
     add_executable(StartupTask WIN32)
     init_non_host_target(StartupTask)
-
     add_dependencies(Telegram StartupTask)
-
     nice_target_sources(StartupTask ${src_loc}
     PRIVATE
         _other/startup_task_win.cpp
     )
-
     set_target_properties(StartupTask PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${output_folder}
     )
 endif()
-
 if (LINUX AND DESKTOP_APP_USE_PACKAGED)
     include(GNUInstallDirs)
     configure_file("../lib/xdg/org.telegram.desktop.service" "${CMAKE_CURRENT_BINARY_DIR}/org.telegram.desktop.service" @ONLY)

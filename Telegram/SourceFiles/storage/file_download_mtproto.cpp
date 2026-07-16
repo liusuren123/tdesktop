@@ -1,12 +1,10 @@
 /*
 This file is part of Telegram Desktop,
 the official desktop application for the Telegram messaging service.
-
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "storage/file_download_mtproto.h"
-
 #include "data/data_document.h"
 #include "data/data_file_origin.h"
 #include "storage/cache/storage_cache_types.h"
@@ -15,19 +13,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mtproto/mtp_instance.h"
 #include "mtproto/mtproto_config.h"
 #include "mtproto/mtproto_auth_key.h"
-
 mtpFileLoader::mtpFileLoader(
-	not_null<Main::Session*> session,
-	const StorageFileLocation &location,
-	Data::FileOrigin origin,
-	LocationType type,
-	const QString &to,
-	int64 loadSize,
-	int64 fullSize,
-	LoadToCacheSetting toCache,
-	LoadFromCloudSetting fromCloud,
-	bool autoLoading,
-	uint8 cacheTag)
+		not_null<Main::Session*> session,
+		const StorageFileLocation &location,
+		Data::FileOrigin origin,
+		LocationType type,
+		const QString &to,
+		int64 loadSize,
+		int64 fullSize,
+		LoadToCacheSetting toCache,
+		LoadFromCloudSetting fromCloud,
+		bool autoLoading,
+		uint8 cacheTag,
+		int64 startOffset)
 : FileLoader(
 	session,
 	to,
@@ -38,9 +36,9 @@ mtpFileLoader::mtpFileLoader(
 	fromCloud,
 	autoLoading,
 	cacheTag)
-, DownloadMtprotoTask(&session->downloader(), location, origin) {
+, DownloadMtprotoTask(&session->downloader(), location, origin)
+, _nextRequestOffset(startOffset) {
 }
-
 mtpFileLoader::mtpFileLoader(
 	not_null<Main::Session*> session,
 	const WebFileLocation &location,
@@ -64,7 +62,6 @@ mtpFileLoader::mtpFileLoader(
 	session->serverConfig().webFileDcId,
 	{ location }) {
 }
-
 mtpFileLoader::mtpFileLoader(
 	not_null<Main::Session*> session,
 	const GeoPointLocation &location,
@@ -88,7 +85,6 @@ mtpFileLoader::mtpFileLoader(
 	session->serverConfig().webFileDcId,
 	{ location }) {
 }
-
 mtpFileLoader::mtpFileLoader(
 	not_null<Main::Session*> session,
 	const AudioAlbumThumbLocation &location,
@@ -112,36 +108,29 @@ mtpFileLoader::mtpFileLoader(
 	session->serverConfig().webFileDcId,
 	{ location }) {
 }
-
 mtpFileLoader::~mtpFileLoader() {
 	if (!_finished) {
 		cancel();
 	}
 }
-
 Data::FileOrigin mtpFileLoader::fileOrigin() const {
 	return DownloadMtprotoTask::fileOrigin();
 }
-
 uint64 mtpFileLoader::objId() const {
 	return DownloadMtprotoTask::objectId();
 }
-
 bool mtpFileLoader::readyToRequest() const {
 	return !_finished
 		&& !_lastComplete
 		&& (_fullSize != 0 || !haveSentRequests())
 		&& (!_fullSize || _nextRequestOffset < _loadSize);
 }
-
 int64 mtpFileLoader::takeNextRequestOffset() {
 	Expects(readyToRequest());
-
 	const auto result = _nextRequestOffset;
 	_nextRequestOffset += Storage::kDownloadPartSize;
 	return result;
 }
-
 bool mtpFileLoader::feedPart(int64 offset, const QByteArray &bytes) {
 	const auto buffer = bytes::make_span(bytes);
 	if (!writeResultPart(offset, buffer)) {
@@ -162,11 +151,9 @@ bool mtpFileLoader::feedPart(int64 offset, const QByteArray &bytes) {
 	}
 	return true;
 }
-
 void mtpFileLoader::cancelOnFail() {
 	cancel(FailureReason::OtherFailure);
 }
-
 bool mtpFileLoader::setWebFileSizeHook(int64 size) {
 	if (!_fullSize || _fullSize == size) {
 		_fullSize = _loadSize = size;
@@ -179,14 +166,11 @@ bool mtpFileLoader::setWebFileSizeHook(int64 size) {
 	cancel(FailureReason::OtherFailure);
 	return false;
 }
-
 void mtpFileLoader::startLoading() {
 	addToQueue();
 }
-
 void mtpFileLoader::startLoadingWithPartial(const QByteArray &data) {
 	Expects(data.startsWith("partial:"));
-
 	constexpr auto kPrefix = 8;
 	const auto parts = (data.size() - kPrefix) / Storage::kDownloadPartSize;
 	const auto use = parts * int64(Storage::kDownloadPartSize);
@@ -196,11 +180,9 @@ void mtpFileLoader::startLoadingWithPartial(const QByteArray &data) {
 	}
 	startLoading();
 }
-
 void mtpFileLoader::cancelHook() {
 	cancelAllRequests();
 }
-
 Storage::Cache::Key mtpFileLoader::cacheKey() const {
 	return v::match(location().data, [&](const WebFileLocation &location) {
 		return Data::WebDocumentCacheKey(location);
@@ -212,7 +194,6 @@ Storage::Cache::Key mtpFileLoader::cacheKey() const {
 		return Data::AudioAlbumThumbCacheKey(location);
 	});
 }
-
 std::optional<MediaKey> mtpFileLoader::fileLocationKey() const {
 	if (_locationType != UnknownFileLocation) {
 		return mediaKey(_locationType, dcId(), objId());
