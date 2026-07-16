@@ -3819,7 +3819,7 @@ bool HistoryInner::hasCopyRestriction(HistoryItem *item) const {
 
 bool HistoryInner::hasCopyMediaRestriction(
 		not_null<HistoryItem*> item) const {
-	return hasCopyRestriction(item) || item->forbidsSaving();
+	return false;
 }
 
 bool HistoryInner::showCopyRestriction(HistoryItem *item) {
