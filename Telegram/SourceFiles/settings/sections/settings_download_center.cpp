@@ -32,6 +32,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 #include <QtCore/QFileInfo>
 #include <QtGui/QAction>
+#include <QtGui/QMouseEvent>
 namespace Settings {
 namespace {
 using namespace Builder;
@@ -77,7 +78,11 @@ public:
 
 protected:
 	void contextMenuEvent(QContextMenuEvent *e) override;
+	void mousePressEvent(QMouseEvent *e) override;
 	void paintEvent(QPaintEvent *e) override;
+
+private:
+	QPoint _lastMenuPosition;
 private:
 	not_null<DownloadCenter*> _controller;
 	Data::DownloadTaskId _taskId = 0;
@@ -127,6 +132,16 @@ TaskRow::TaskRow(
 }
 void TaskRow::contextMenuEvent(QContextMenuEvent *e) {
 	_controller->showTaskMenu(e->globalPos(), _taskId);
+	e->accept();
+}
+
+void TaskRow::mousePressEvent(QMouseEvent *e) {
+	if (e->button() == Qt::RightButton) {
+		_controller->showTaskMenu(e->globalPos(), _taskId);
+		e->accept();
+		return;
+	}
+	RippleButton::mousePressEvent(e);
 }
 void TaskRow::refreshFromTask(const Data::DownloadTask &task) {
 	_fileName = task.fileName.isEmpty()
@@ -227,16 +242,29 @@ void DownloadCenter::setupContent() {
 	const auto actions = content->add(
 		object_ptr<Ui::VerticalLayout>(content));
 	const auto resumeAll = actions->add(
-		object_ptr<Ui::SettingsButton>(
-			actions,
-			tr::lng_download_center_resume_all()));
-	resumeAll->addClickHandler([=, &downloadCenter] {
-		for (const auto *task : downloadCenter.tasks()) {
-			if (task->state == Data::DownloadState::Paused) {
-				downloadCenter.resume(task->id);
+			object_ptr<Ui::SettingsButton>(
+				actions,
+				tr::lng_download_center_resume_all()));
+		resumeAll->addClickHandler([=, &downloadCenter] {
+			for (const auto *task : downloadCenter.tasks()) {
+				if (task->state == Data::DownloadState::Paused) {
+					downloadCenter.resume(task->id);
+				}
 			}
-		}
-	});
+		});
+
+		const auto pauseAll = actions->add(
+			object_ptr<Ui::SettingsButton>(
+				actions,
+				tr::lng_download_center_pause_all()));
+		pauseAll->addClickHandler([=, &downloadCenter] {
+			for (const auto *task : downloadCenter.tasks()) {
+				if (task->state == Data::DownloadState::Downloading
+					|| task->state == Data::DownloadState::Queued) {
+					downloadCenter.pause(task->id);
+				}
+			}
+		});
 	const auto clearCompleted = actions->add(
 		object_ptr<Ui::SettingsButton>(
 			actions,

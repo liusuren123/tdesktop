@@ -1224,6 +1224,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_download_center_section_actions" = "Manage";
 "lng_download_center_empty" = "No downloads yet.";
 "lng_download_center_resume_all" = "Resume all paused";
+"lng_download_center_pause_all" = "Pause all active";
 "lng_download_center_clear_completed" = "Clear completed";
 "lng_download_center_clear_completed_title" = "Clear completed downloads?";
 "lng_download_center_clear_failed" = "Clear failed";
