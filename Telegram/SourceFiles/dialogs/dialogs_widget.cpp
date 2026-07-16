@@ -45,6 +45,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/chat/group_call_bar.h"
 #include "ui/chat/more_chats_bar.h"
 #include "ui/controls/download_bar.h"
+#include "ui/controls/download_center_bar.h"
+#include "settings/sections/settings_download_center.h"
+#include "data/data_download_center.h"
 #include "ui/controls/jump_down_button.h"
 #include "ui/controls/swipe_handler.h"
 #include "ui/painter.h"
@@ -772,6 +775,7 @@ Widget::Widget(
 
 		setupMoreChatsBar();
 		setupDownloadBar();
+				setupDownloadCenterBar();
 	}
 	setupSwipeBack();
 
@@ -1635,6 +1639,38 @@ void Widget::setupSupportMode() {
 
 	fullSearchRefreshOn(session().settings().supportAllSearchResultsValue(
 	) | rpl::to_empty);
+}
+
+void Widget::setupDownloadCenterBar() {
+	if (_layout == Layout::Child) {
+		return;
+	}
+	_downloadCenterBar = std::make_unique<Ui::DownloadCenterBar>(this);
+	_downloadCenterBar->addClickHandler([=] {
+		controller()->showSettings(
+			Settings::DownloadCenterId());
+	});
+	_downloadCenterBar->raise();
+
+	const auto center = &controller()->session().downloadCenter();
+		const auto recompute = [=] {
+			auto count = 0;
+			for (const auto *task : center->tasks()) {
+				const auto s = task->state;
+				if (s == Data::DownloadState::Queued
+					|| s == Data::DownloadState::Downloading
+					|| s == Data::DownloadState::Paused
+					|| s == Data::DownloadState::Failed) {
+					++count;
+				}
+			}
+			_downloadCenterBar->setActiveCount(count);
+		};
+		center->taskAdded() | rpl::on_next(recompute, _downloadCenterBar->lifetime());
+		center->taskUpdated() | rpl::on_next(recompute, _downloadCenterBar->lifetime());
+		center->taskRemoved() | rpl::on_next(recompute, _downloadCenterBar->lifetime());
+		center->tasksReloaded() | rpl::on_next(recompute, _downloadCenterBar->lifetime());
+		recompute();
 }
 
 void Widget::setupMainMenuToggle() {
@@ -4403,10 +4439,19 @@ void Widget::updateControlsGeometry() {
 		_search->height());
 
 	auto mainMenuLeft = anim::interpolate(
-		st::dialogsFilterPadding.x(),
-		(_narrowWidth - _mainMenu.toggle->width()) / 2,
-		narrowRatio);
-	_mainMenu.toggle->moveToLeft(mainMenuLeft, st::dialogsFilterPadding.y());
+			st::dialogsFilterPadding.x(),
+			(_narrowWidth - _mainMenu.toggle->width()) / 2,
+			narrowRatio);
+		_mainMenu.toggle->moveToLeft(mainMenuLeft, st::dialogsFilterPadding.y());
+		if (_downloadCenterBar && _downloadCenterBar->isVisible()) {
+			const auto dcWidth = _downloadCenterBar->width();
+			const auto dcHeight = _downloadCenterBar->height();
+			_downloadCenterBar->moveToLeft(
+				mainMenuLeft + _mainMenu.toggle->width(),
+				st::dialogsFilterPadding.y()
+					+ (_mainMenu.toggle->height() - dcHeight) / 2);
+			(void)dcWidth;
+		}
 	_mainMenu.under->setGeometry(
 		0,
 		0,

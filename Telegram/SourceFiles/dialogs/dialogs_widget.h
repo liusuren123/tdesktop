@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_key.h"
 #include "window/section_widget.h"
 #include "ui/controls/swipe_handler_data.h"
+#include "ui/controls/download_center_bar.h"
 #include "ui/effects/animations.h"
 #include "ui/userpic_view.h"
 #include "mtproto/sender.h"
@@ -213,6 +214,7 @@ private:
 	void setupMainMenuToggle();
 	void setupMoreChatsBar();
 	void setupDownloadBar();
+		void setupDownloadCenterBar();
 	void setupShortcuts();
 	void setupStories();
 	void setupSwipeBack();
@@ -372,6 +374,7 @@ private:
 	object_ptr<BottomButton> _updateTelegram = { nullptr };
 	object_ptr<BottomButton> _loadMoreChats = { nullptr };
 	std::unique_ptr<Ui::DownloadBar> _downloadBar;
+		std::unique_ptr<Ui::DownloadCenterBar> _downloadCenterBar;
 	std::unique_ptr<Window::ConnectionState> _connecting;
 
 	Ui::Animations::Simple _scrollToAnimation;

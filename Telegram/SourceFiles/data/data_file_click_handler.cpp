@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_document.h"
 #include "data/data_session.h"
 #include "data/data_download_manager.h"
+#include "data/data_download_center.h"
 #include "data/data_photo.h"
 #include "main/main_session.h"
 
@@ -109,11 +110,12 @@ void DocumentSaveClickHandler::Save(
 			filename,
 			filedir);
 		if (!savename.isEmpty()) {
-			data->save(origin, savename);
-			if (started) {
-				started();
-			}
-		}
+					(void)data->session().downloadCenter().addDocument(
+						data, savename, origin);
+					if (started) {
+						started();
+					}
+				}
 	}));
 }
 
@@ -123,14 +125,6 @@ void DocumentSaveClickHandler::SaveAndTrack(
 		Mode mode,
 		Fn<void()> started) {
 	Save(itemId ? itemId : Data::FileOrigin(), document, mode, [=] {
-		if (document->loading() && !document->loadingFilePath().isEmpty()) {
-			if (const auto item = document->owner().message(itemId)) {
-				Core::App().downloadManager().addLoading({
-					.item = item,
-					.document = document,
-				});
-			}
-		}
 		if (started) {
 			started();
 		}

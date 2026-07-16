@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/file_utilities.h"
 #include "data/data_document.h"
 #include "data/data_document_media.h"
+#include "data/data_download_center.h"
 #include "data/data_file_click_handler.h"
 #include "data/data_photo.h"
 #include "data/data_photo_media.h"
@@ -181,16 +182,17 @@ void AddAction(
 		}
 	};
 	const auto saveDocuments = [=](const QString &folderPath) {
-		for (const auto &[document, origin] : documents) {
-			if (!folderPath.isEmpty()) {
-				const auto name =
-					base::FileNameFromUserString(document->filename());
-				document->save(origin, folderPath + name);
-			} else {
-				DocumentSaveClickHandler::SaveAndTrack(origin, document);
+			for (const auto &[document, origin] : documents) {
+				if (!folderPath.isEmpty()) {
+					const auto name =
+						base::FileNameFromUserString(document->filename());
+					(void)document->session().downloadCenter().addDocument(
+						document, folderPath + name, origin);
+				} else {
+					DocumentSaveClickHandler::SaveAndTrack(origin, document);
+				}
 			}
-		}
-	};
+		};
 
 	menu->addAction(text, [=] {
 		const auto save = [=](const QString &folderPath) {
