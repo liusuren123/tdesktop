@@ -115,14 +115,17 @@ void ParallelDownloadController::prepareChunks() {
 	const auto fileName = fileInfo.fileName();
 	const auto stamp = QDateTime::currentMSecsSinceEpoch();
 	_chunks.clear();
-	_chunks.reserve(chunksCount);
-	for (int i = 0; i < chunksCount; ++i) {
-		const auto startOffset = int64(i) * alignedPerChunk;
-		if (startOffset >= totalSize) {
-			break;
-		}
-		const auto endOffset = std::min(startOffset + alignedPerChunk, totalSize);
-		const auto chunkLength = endOffset - startOffset;
+		_chunks.reserve(chunksCount);
+		for (int i = 0; i < chunksCount; ++i) {
+			const auto startOffset = int64(i) * alignedPerChunk;
+			if (startOffset >= totalSize) {
+				break;
+			}
+			const auto naturalEnd = startOffset + alignedPerChunk;
+			const auto endOffset = (i + 1 >= chunksCount || naturalEnd >= totalSize)
+				? totalSize
+				: std::min(naturalEnd, totalSize);
+			const auto chunkLength = endOffset - startOffset;
 		auto chunk = Chunk();
 		chunk.startOffset = startOffset;
 		chunk.endOffset = endOffset;
