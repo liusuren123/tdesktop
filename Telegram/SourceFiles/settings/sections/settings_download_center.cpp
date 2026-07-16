@@ -68,12 +68,15 @@ public:
 		QWidget *parent,
 		not_null<DownloadCenter*> controller,
 		Data::DownloadTaskId taskId);
+
 	[[nodiscard]] Data::DownloadTaskId taskId() const {
 		return _taskId;
 	}
+
 	void refreshFromTask(const Data::DownloadTask &task);
+
 protected:
-	bool eventHook(QEvent *e) override;
+	void contextMenuEvent(QContextMenuEvent *e) override;
 	void paintEvent(QPaintEvent *e) override;
 private:
 	not_null<DownloadCenter*> _controller;
@@ -122,13 +125,8 @@ TaskRow::TaskRow(
 	resize(width(), st::settingsDownloadCenterRowHeight);
 	setAcceptBoth(true);
 }
-bool TaskRow::eventHook(QEvent *e) {
-	if (e->type() == QEvent::ContextMenu) {
-		const auto menuEvent = static_cast<QContextMenuEvent*>(e);
-		_controller->showTaskMenu(menuEvent->globalPos(), _taskId);
-		return true;
-	}
-	return RippleButton::eventHook(e);
+void TaskRow::contextMenuEvent(QContextMenuEvent *e) {
+	_controller->showTaskMenu(e->globalPos(), _taskId);
 }
 void TaskRow::refreshFromTask(const Data::DownloadTask &task) {
 	_fileName = task.fileName.isEmpty()
