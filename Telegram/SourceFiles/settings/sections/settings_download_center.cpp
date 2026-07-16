@@ -129,6 +129,11 @@ TaskRow::TaskRow(
 , _taskId(taskId) {
 	resize(width(), st::settingsDownloadCenterRowHeight);
 	setAcceptBoth(true);
+	setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(this, &QWidget::customContextMenuRequested, this,
+		[=](QPoint pos) {
+			_controller->showTaskMenu(mapToGlobal(pos), _taskId);
+		});
 }
 void TaskRow::contextMenuEvent(QContextMenuEvent *e) {
 	_controller->showTaskMenu(e->globalPos(), _taskId);
