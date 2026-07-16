@@ -1249,26 +1249,27 @@ void DocumentData::handleLoaderUpdates() {
 			} else if (!_access && !_url.isEmpty()) {
 				return nullptr;
 			}
-			auto loader = std::make_unique<mtpFileLoader>(
-				&session(),
-				StorageFileLocation(
-					_dc,
-					session().userId(),
-					MTP_inputDocumentFileLocation(
-						MTP_long(id),
-						MTP_long(_access),
-						MTP_bytes(_fileReference),
-						MTP_string())),
-				origin,
-				locationType(),
-				toFile,
-				loadSize,
-				int64(size),
-				(saveToCache() ? LoadToCacheAsWell : LoadToFileOnly),
-				fromCloud,
-				false,
-				cacheTag(),
-				startOffset);
+			const auto chunkEnd = startOffset + loadSize;
+				auto loader = std::make_unique<mtpFileLoader>(
+					&session(),
+					StorageFileLocation(
+						_dc,
+						session().userId(),
+						MTP_inputDocumentFileLocation(
+							MTP_long(id),
+							MTP_long(_access),
+							MTP_bytes(_fileReference),
+							MTP_string())),
+					origin,
+					locationType(),
+					toFile,
+					chunkEnd,
+					int64(size),
+					(saveToCache() ? LoadToCacheAsWell : LoadToFileOnly),
+					fromCloud,
+					false,
+					cacheTag(),
+					startOffset);
 			loader->permitLoadFromCloud();
 			return loader;
 		}
