@@ -256,23 +256,32 @@ bool ParallelDownloadController::concatenateChunks() {
 		return false;
 	}
 	for (const auto &chunk : _chunks) {
-		auto input = QFile(chunk.tempFilePath);
-		if (!input.open(QIODevice::ReadOnly)) {
-			return false;
-		}
-		constexpr auto kBufferSize = int64(256 * 1024);
-		auto buffer = QByteArray(int(kBufferSize), Qt::Uninitialized);
-		while (!input.atEnd()) {
-			const auto read = input.read(buffer.data(), buffer.size());
-			if (read < 0) {
+			auto input = QFile(chunk.tempFilePath);
+			if (!input.open(QIODevice::ReadOnly)) {
 				return false;
 			}
-			if (output.write(buffer.constData(), read) != read) {
+			if (!input.seek(chunk.startOffset)) {
 				return false;
 			}
+			constexpr auto kBufferSize = int64(256 * 1024);
+			auto buffer = QByteArray(int(kBufferSize), Qt::Uninitialized);
+			auto remaining = chunk.endOffset - chunk.startOffset;
+			while (remaining > 0) {
+				const auto toRead = std::min(int64(buffer.size()), remaining);
+				const auto read = input.read(buffer.data(), toRead);
+				if (read < 0) {
+					return false;
+				}
+				if (read == 0) {
+					break;
+				}
+				if (output.write(buffer.constData(), read) != read) {
+					return false;
+				}
+				remaining -= read;
+			}
+			QFile::remove(chunk.tempFilePath);
 		}
-		QFile::remove(chunk.tempFilePath);
-	}
 	output.close();
 	return true;
 }
