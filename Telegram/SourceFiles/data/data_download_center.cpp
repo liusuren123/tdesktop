@@ -115,6 +115,9 @@ DownloadTaskId DownloadCenter::addDocument(
 	task.savePath = savePath;
 	task.mimeType = document->mimeString();
 	task.totalSize = document->size;
+	task.downloadDcId = document->remoteDcId();
+	task.accessHash = document->remoteAccessHash();
+	task.fileReference = document->remoteFileReference();
 	task.addedAt = QDateTime::currentDateTime();
 	task.origin = origin;
 	const auto id = task.id;
