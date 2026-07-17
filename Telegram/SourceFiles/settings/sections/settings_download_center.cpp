@@ -31,6 +31,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_boxes.h"
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "base/debug_log.h"
 #include <QtCore/QFileInfo>
 #include <QtGui/QAction>
@@ -355,12 +357,27 @@ void DownloadCenter::setupContent() {
 				actions,
 				tr::lng_download_center_clear_all()));
 		clearAll->addClickHandler([=] {
-			controller()->show(
-				Box(Settings::DownloadCenterClearBox,
-					controller(),
-					DownloadCenterClearKind::All));
-		});
-	Ui::ResizeFitChild(this, content);
+					controller()->show(
+						Box(Settings::DownloadCenterClearBox,
+							controller(),
+							DownloadCenterClearKind::All));
+				});
+			Ui::AddSkip(actions);
+			Ui::AddDivider(actions);
+			Ui::AddSkip(actions);
+			const auto autoResume = actions->add(
+				object_ptr<Ui::SettingsButton>(
+					actions,
+					tr::lng_download_center_auto_resume(),
+					st::settingsButtonNoIcon
+				))->toggleOn(
+					Core::App().settings().downloadAutoResumeValue()
+				);
+			autoResume->toggledChanges(
+			) | rpl::on_next([](bool enabled) {
+				Core::App().settings().setDownloadAutoResume(enabled);
+			}, lifetime());
+			Ui::ResizeFitChild(this, content);
 	downloadCenter.taskAdded(
 	) | rpl::on_next([=](Data::DownloadTaskId id) {
 		onTaskAdded(id);

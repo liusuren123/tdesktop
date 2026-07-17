@@ -271,8 +271,9 @@ QByteArray Settings::serialize() const {
 			+ Serialize::bytearraySize(value);
 	}
 	size += sizeof(qint32) // _audioPlaybackSpeed
-		+ sizeof(qint32) // _mediaGridZoomStep
-		+ sizeof(qint32); // _pullToNextChannel
+				+ sizeof(qint32) // _mediaGridZoomStep
+				+ sizeof(qint32) // _pullToNextChannel
+				+ sizeof(qint32); // _downloadAutoResume
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -447,9 +448,10 @@ QByteArray Settings::serialize() const {
 			stream << key << value;
 		}
 		stream << qint32(SerializePlaybackSpeed(_audioPlaybackSpeed.current()));
-		stream << qint32(_mediaGridZoomStep);
-		stream << qint32(_pullToNextChannel.current() ? 1 : 0);
-	}
+				stream << qint32(_mediaGridZoomStep);
+				stream << qint32(_pullToNextChannel.current() ? 1 : 0);
+				stream << qint32(_downloadAutoResume.current() ? 1 : 0);
+			}
 
 	Ensures(result.size() == size);
 	return result;
@@ -556,6 +558,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	qint32 cornerReply = _cornerReply.current() ? 1 : 0;
 	qint32 cornerReaction = _cornerReaction.current() ? 1 : 0;
 	qint32 pullToNextChannel = _pullToNextChannel.current() ? 1 : 0;
+		qint32 downloadAutoResume = _downloadAutoResume.current() ? 1 : 0;
 	qint32 legacySkipTranslationForLanguage = _translateButtonEnabled ? 1 : 0;
 	qint32 skipTranslationLanguagesCount = 0;
 	std::vector<LanguageId> skipTranslationLanguages;
@@ -972,8 +975,11 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 		}
 	}
 	if (!stream.atEnd()) {
-		stream >> pullToNextChannel;
-	}
+			stream >> pullToNextChannel;
+		}
+		if (!stream.atEnd()) {
+			stream >> downloadAutoResume;
+		}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for Core::Settings::constructFromSerialized()"));
@@ -1160,6 +1166,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_cornerReply = (cornerReply == 1);
 	_cornerReaction = (cornerReaction == 1);
 	_pullToNextChannel = (pullToNextChannel == 1);
+		_downloadAutoResume = (downloadAutoResume == 1);
 	{ // Parse the legacy translation setting.
 		if (legacySkipTranslationForLanguage == 0) {
 			_translateButtonEnabled = false;
@@ -1653,6 +1660,7 @@ void Settings::resetOnLastLogout() {
 	_videoQuality = {};
 	_chatFiltersHorizontal = false;
 	_pullToNextChannel = true;
+		_downloadAutoResume = false;
 	_quickDialogAction = Dialogs::Ui::QuickDialogAction::Disabled;
 	_notificationsVolume = 100;
 

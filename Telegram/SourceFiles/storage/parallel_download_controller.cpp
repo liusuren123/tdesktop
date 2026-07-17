@@ -33,13 +33,17 @@ ParallelDownloadController::~ParallelDownloadController() {
 	LOG(("PDC: dtor toFile=%1 started=%2 chunks=%3")
 		.arg(_args.toFile).arg(_started).arg(_chunks.size()));
 	if (!_started) {
+		LOG(("PDC: dtor early return (not started)"));
 		return;
 	}
 	for (auto &chunk : _chunks) {
 		if (chunk.loader) {
+			LOG(("PDC: dtor cancelling chunk[%1]").arg(chunk.startOffset));
 			chunk.loader->cancel();
+			LOG(("PDC: dtor chunk[%1] cancelled").arg(chunk.startOffset));
 		}
 	}
+	LOG(("PDC: dtor done"));
 }
 bool ParallelDownloadController::startable() const {
 	return _args.session != nullptr
@@ -109,7 +113,9 @@ void ParallelDownloadController::stop() {
 	}
 	for (auto &chunk : _chunks) {
 		if (chunk.loader && !chunk.finished) {
+			LOG(("PDC: stop cancelling chunk[%1]").arg(chunk.startOffset));
 			chunk.loader->cancel();
+			LOG(("PDC: stop chunk[%1] cancelled").arg(chunk.startOffset));
 		}
 	}
 	_started = false;

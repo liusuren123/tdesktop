@@ -244,11 +244,14 @@ Session::Session(
 	_api->requestNotifySettings(MTP_inputNotifyChats());
 	_api->requestNotifySettings(MTP_inputNotifyBroadcasts());
 	Core::App().downloadManager().trackSession(this);
-	appConfig().value(
-	) | rpl::on_next([=] {
-		appConfigRefreshed();
-	}, _lifetime);
-}
+		appConfig().value(
+		) | rpl::on_next([=] {
+			appConfigRefreshed();
+		}, _lifetime);
+
+		_downloadCenter->loadFromDisk(
+			Core::App().settings().downloadAutoResume());
+	}
 void Session::appConfigRefreshed() {
 	const auto &config = appConfig();
 	_frozen = FreezeInfo{

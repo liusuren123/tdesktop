@@ -106,7 +106,7 @@ public:
 		return _tasksReloaded.events();
 	}
 	void saveToDisk();
-	void loadFromDisk();
+		void loadFromDisk(bool autoResumeQueued = false);
 	[[nodiscard]] static int RecommendedParallelChunks();
 private:
 	void startTask(DownloadTaskId id);

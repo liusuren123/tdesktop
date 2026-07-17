@@ -404,8 +404,11 @@ void DownloadCenter::stopTask(DownloadTaskId id) {
 	LOG(("DLC: stopTask id=%1").arg(id));
 	const auto it = _controllers.find(id);
 	if (it != _controllers.end()) {
+		LOG(("DLC: stopTask id=%1 calling controller->stop").arg(id));
 		it->second->stop();
+		LOG(("DLC: stopTask id=%1 controller->stop returned").arg(id));
 	}
+	LOG(("DLC: stopTask id=%1 erasing controller").arg(id));
 	_controllers.erase(id);
 	LOG(("DLC: stopTask id=%1 done").arg(id));
 }
@@ -637,11 +640,24 @@ void DownloadCenter::saveToDisk() {
 	const auto snapshot = buildSnapshot();
 	writeSnapshot(snapshot);
 }
-void DownloadCenter::loadFromDisk() {
+void DownloadCenter::loadFromDisk(bool autoResumeQueued) {
 	const auto snapshot = readSnapshot();
 	if (!snapshot) {
 		return;
 	}
 	restoreSnapshot(*snapshot);
+	if (autoResumeQueued) {
+		auto ids = std::vector<DownloadTaskId>();
+		ids.reserve(_tasks.size());
+		for (const auto &it : _tasks) {
+			if (it.second.state == DownloadState::Queued) {
+				ids.push_back(it.first);
+			}
+		}
+		for (const auto id : ids) {
+			LOG(("DLC: auto-resume queued task id=%1").arg(id));
+			resume(id);
+		}
+	}
 }
 } // namespace Data

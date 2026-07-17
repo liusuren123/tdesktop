@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mainwidget.h"
 #include "mainwindow.h"
 #include "core/application.h"
+#include "base/debug_log.h"
 #include "core/file_location.h"
 #include "storage/storage_account.h"
 #include "storage/file_download_mtproto.h"
@@ -334,6 +335,11 @@ void FileLoader::cancel() {
 
 void FileLoader::cancel(FailureReason fail) {
 	const auto started = (currentOffset() > 0);
+	LOG(("FL: cancel fail=%1 started=%2 file=%3 fileOpen=%4")
+		.arg(int(fail))
+		.arg(started ? "yes" : "no")
+		.arg(_filename)
+		.arg(_fileIsOpen ? "yes" : "no"));
 
 	cancelHook();
 
@@ -342,7 +348,8 @@ void FileLoader::cancel(FailureReason fail) {
 	if (_fileIsOpen) {
 		_file.close();
 		_fileIsOpen = false;
-		_file.remove();
+		const auto removed = _file.remove();
+		LOG(("FL: cancel removed temp file=%1 ok=%2").arg(_filename).arg(removed ? "yes" : "no"));
 	}
 	_data = QByteArray();
 
@@ -356,6 +363,7 @@ void FileLoader::cancel(FailureReason fail) {
 		_filename = QString();
 		_file.setFileName(_filename);
 	}
+	LOG(("FL: cancel done"));
 }
 
 int64 FileLoader::currentOffset() const {

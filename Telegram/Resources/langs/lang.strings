@@ -1238,6 +1238,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_download_center_action_retry" = "Retry";
 "lng_download_center_action_cancel" = "Cancel";
 "lng_download_center_action_remove" = "Remove from list";
+"lng_download_center_auto_resume" = "Auto-resume downloads on startup";
 "lng_settings_ask_question" = "Ask a Question";
 "lng_settings_ask_sure" = "Please note that Telegram Support is done by volunteers. We try to respond as quickly as possible, but it may take a while.\n\nPlease take a look at the Telegram FAQ: it has important troubleshooting tips and answers to most questions.";
 "lng_settings_faq_button" = "Go to FAQ";

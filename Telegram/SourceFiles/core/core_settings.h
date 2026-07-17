@@ -553,17 +553,30 @@ public:
 	}
 
 	void setAutoDownloadDictionaries(bool value) {
-		_autoDownloadDictionaries = value;
-	}
-	bool autoDownloadDictionaries() const {
-		return _autoDownloadDictionaries.current();
-	}
-	rpl::producer<bool> autoDownloadDictionariesValue() const {
-		return _autoDownloadDictionaries.value();
-	}
-	rpl::producer<bool> autoDownloadDictionariesChanges() const {
-		return _autoDownloadDictionaries.changes();
-	}
+			_autoDownloadDictionaries = value;
+		}
+		bool autoDownloadDictionaries() const {
+			return _autoDownloadDictionaries.current();
+		}
+		rpl::producer<bool> autoDownloadDictionariesValue() const {
+			return _autoDownloadDictionaries.value();
+		}
+		rpl::producer<bool> autoDownloadDictionariesChanges() const {
+			return _autoDownloadDictionaries.changes();
+		}
+
+		void setDownloadAutoResume(bool value) {
+			_downloadAutoResume = value;
+		}
+		bool downloadAutoResume() const {
+			return _downloadAutoResume.current();
+		}
+		rpl::producer<bool> downloadAutoResumeValue() const {
+			return _downloadAutoResume.value();
+		}
+		rpl::producer<bool> downloadAutoResumeChanges() const {
+			return _downloadAutoResume.changes();
+		}
 
 	[[nodiscard]] float64 videoPlaybackSpeed(
 			bool lastNonDefault = false) const {
@@ -1137,6 +1150,7 @@ private:
 	QByteArray _videoPipGeometry;
 	rpl::variable<std::vector<int>> _dictionariesEnabled;
 	rpl::variable<bool> _autoDownloadDictionaries = true;
+		rpl::variable<bool> _downloadAutoResume = false;
 	rpl::variable<bool> _mainMenuAccountsShown = true;
 	mutable std::vector<RecentEmojiPreload> _recentEmojiPreload;
 	mutable std::vector<RecentEmoji> _recentEmoji;
