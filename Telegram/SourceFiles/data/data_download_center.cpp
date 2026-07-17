@@ -359,28 +359,47 @@ void DownloadCenter::startTask(DownloadTaskId id) {
 	}
 
 	// If totalSize was never refreshed (e.g. the user quit before the
-	// server reported the real file size), pick it up from DocumentData
-	// now so the chunk loader doesn't fire Expects(loadSize > 0).
-	if (it->second.totalSize <= 0
-			&& it->second.source == DownloadSource::Document) {
-		auto &owner = _session->data();
-		const auto document = owner.document(it->second.documentId);
-		if (document && document->size > 0) {
-			LOG(("DLC: startTask id=%1 refreshing totalSize from %2 to %3")
-				.arg(id)
-				.arg(it->second.totalSize)
-				.arg(document->size));
-			it->second.totalSize = document->size;
-			_taskUpdated.fire_copy(id);
-			scheduleSave();
+		// server reported the real file size), pick it up from DocumentData
+		// now so the chunk loader doesn't fire Expects(loadSize > 0).
+		if (it->second.totalSize <= 0
+				&& it->second.source == DownloadSource::Document) {
+			auto &owner = _session->data();
+			const auto document = owner.document(it->second.documentId);
+			if (document && document->size > 0) {
+				LOG(("DLC: startTask id=%1 refreshing totalSize from %2 to %3")
+					.arg(id)
+					.arg(it->second.totalSize)
+					.arg(document->size));
+				it->second.totalSize = document->size;
+				_taskUpdated.fire_copy(id);
+				scheduleSave();
+			}
 		}
-	}
-	if (it->second.totalSize <= 0) {
-		LOG(("DLC: startTask id=%1 totalSize still unknown, failing").arg(id));
-		setState(id, DownloadState::Failed,
-			u"File size unavailable, please retry"_q);
-		return;
-	}
+		if (it->second.totalSize <= 0) {
+			LOG(("DLC: startTask id=%1 totalSize still unknown, failing").arg(id));
+			setState(id, DownloadState::Failed,
+				u"File size unavailable, please retry"_q);
+			return;
+		}
+
+		// Restore DocumentData's remote location from the persisted task if
+		// the in-memory copy hasn't been populated yet (e.g. on a fresh
+		// restart before the user opened the source chat). Without this
+		// setRemoteLocation, isNull() returns true and createFileLoaderForParallel
+		// asserts Expects(!isNull()).
+		if (it->second.source == DownloadSource::Document) {
+			auto &owner = _session->data();
+			const auto document = owner.document(it->second.documentId);
+			if (document
+					&& document->isNull()
+					&& !it->second.fileReference.isEmpty()) {
+				LOG(("DLC: startTask id=%1 restoring document remote location").arg(id));
+				document->setRemoteLocation(
+					it->second.downloadDcId,
+					it->second.accessHash,
+					it->second.fileReference);
+			}
+		}
 	auto args = Storage::ParallelDownloadController::Args{
 			.session = _session,
 			.origin = it->second.origin,
@@ -392,14 +411,22 @@ void DownloadCenter::startTask(DownloadTaskId id) {
 			},
 		};
 		if (it->second.source == DownloadSource::Document) {
-				auto &owner = _session->data();
-				const auto document = owner.document(it->second.documentId);
-				args.document = document;
-			}
-		if (!args.document) {
-			LOG(("DLC: startTask id=%1 no_document").arg(id));
-			return;
-		}
+					auto &owner = _session->data();
+					const auto document = owner.document(it->second.documentId);
+					args.document = document;
+				}
+				if (!args.document) {
+					LOG(("DLC: startTask id=%1 no_document").arg(id));
+					setState(id, DownloadState::Failed,
+						u"Document unavailable, please retry"_q);
+					return;
+				}
+				if (args.document->isNull()) {
+					LOG(("DLC: startTask id=%1 document isNull, failing").arg(id));
+					setState(id, DownloadState::Failed,
+						u"Document unavailable, please retry"_q);
+					return;
+				}
 		auto controller = std::make_unique<Storage::ParallelDownloadController>(
 			std::move(args));
 		if (!controller->startable()) {
