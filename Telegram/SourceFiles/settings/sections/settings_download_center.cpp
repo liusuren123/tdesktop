@@ -183,11 +183,13 @@ void TaskRow::rebuildMenu() {
 			_controller->handlePause(id);
 		});
 	}
-	if (state == Data::DownloadState::Paused) {
-		_menu->addAction(tr::lng_download_center_action_resume(tr::now), [=] {
-			_controller->handleResume(id);
-		});
-	}
+	if (state == Data::DownloadState::Paused
+			|| state == Data::DownloadState::Queued
+			|| state == Data::DownloadState::Failed) {
+			_menu->addAction(tr::lng_download_center_action_resume(tr::now), [=] {
+				_controller->handleResume(id);
+			});
+		}
 	if (state == Data::DownloadState::Failed) {
 		_menu->addAction(tr::lng_download_center_action_retry(tr::now), [=] {
 			_controller->handleRetry(id);

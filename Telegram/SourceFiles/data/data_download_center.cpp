@@ -177,12 +177,14 @@ void DownloadCenter::resume(DownloadTaskId id) {
 		return;
 	}
 	LOG(("DLC: resume id=%1 state=%2").arg(id).arg(int(it->second.state)));
-	if (it->second.state != DownloadState::Paused
-		&& it->second.state != DownloadState::Failed) {
+	const auto state = it->second.state;
+	if (state != DownloadState::Paused
+		&& state != DownloadState::Failed
+		&& state != DownloadState::Queued) {
 		return;
 	}
 	const auto controllerIt = _controllers.find(id);
-	if (controllerIt != _controllers.end()) {
+	if (controllerIt != _controllers.end() && state == DownloadState::Paused) {
 		LOG(("DLC: resume id=%1 has_controller, calling controller->start").arg(id));
 		const auto weak = base::make_weak(this);
 		controllerIt->second->start(
@@ -206,8 +208,10 @@ void DownloadCenter::resume(DownloadTaskId id) {
 		setState(id, DownloadState::Downloading);
 		LOG(("DLC: resume id=%1 done, state=Downloading").arg(id));
 	} else {
-		LOG(("DLC: resume id=%1 NO_CONTROLLER, startTask").arg(id));
-		setState(id, DownloadState::Queued);
+		LOG(("DLC: resume id=%1 NO_CONTROLLER or QUEUED, startTask").arg(id));
+		if (state != DownloadState::Queued) {
+			setState(id, DownloadState::Queued);
+		}
 		startTask(id);
 	}
 }
@@ -571,9 +575,12 @@ void DownloadCenter::restoreSnapshot(const Snapshot &snapshot) {
 	_controllers.clear();
 	_nextId = snapshot.nextId;
 	for (auto task : snapshot.tasks) {
-		if (task.state != DownloadState::Completed
-			&& task.state != DownloadState::Cancelled) {
-			task.state = DownloadState::Queued;
+		// Preserve Completed / Cancelled / Failed / Paused as-is so users
+		// can see the correct state and resume work. Only Downloading
+		// tasks need to be downgraded because their in-flight chunk
+		// requests cannot be reliably resumed across a restart.
+		if (task.state == DownloadState::Downloading) {
+			task.state = DownloadState::Paused;
 		}
 		const auto id = task.id;
 		_tasks.emplace(id, std::move(task));
