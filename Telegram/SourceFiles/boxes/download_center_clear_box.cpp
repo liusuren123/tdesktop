@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/buttons.h"
 #include "ui/text/text_utilities.h"
 #include "styles/style_layers.h"
+#include "base/debug_log.h"
 #include <vector>
 namespace Settings {
 void DownloadCenterClearBox(
@@ -28,6 +29,7 @@ void DownloadCenterClearBox(
 	box->addButton(tr::lng_box_ok(), [=, &controller = controller] {
 			auto &center = controller->session().downloadCenter();
 			const auto want = kind;
+			LOG(("DLC: ClearBox ok kind=%1 total=%2").arg(int(want)).arg(center.totalCount()));
 			std::vector<Data::DownloadTaskId> toRemove;
 			toRemove.reserve(center.totalCount());
 			for (const auto *task : center.tasks()) {
@@ -37,12 +39,16 @@ void DownloadCenterClearBox(
 					|| (want == DownloadCenterClearKind::Failed
 						&& task->state == Data::DownloadState::Failed);
 				if (remove) {
+					LOG(("DLC: ClearBox marking id=%1 state=%2").arg(task->id).arg(int(task->state)));
 					toRemove.push_back(task->id);
 				}
 			}
+			LOG(("DLC: ClearBox toRemove.size=%1, starting erase loop").arg(toRemove.size()));
 			for (const auto id : toRemove) {
+				LOG(("DLC: ClearBox calling remove(%1)").arg(id));
 				center.remove(id);
 			}
+			LOG(("DLC: ClearBox done"));
 			box->closeBox();
 		});
 	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });

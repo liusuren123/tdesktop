@@ -30,6 +30,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_boxes.h"
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
+#include "base/debug_log.h"
 #include <QtCore/QFileInfo>
 #include <QtGui/QAction>
 #include <QtGui/QMouseEvent>
@@ -130,6 +131,7 @@ TaskRow::TaskRow(
 , _controller(controller)
 , _taskId(taskId)
 , _menuButton(this) {
+	LOG(("DLC: TaskRow ctor id=%1 parent=%2").arg(_taskId).arg((quintptr)parent));
 	resize(width(), st::settingsDownloadCenterRowHeight);
 	setAcceptBoth(true);
 	_menuButton->setText(u"\u22EE"_q);
@@ -140,7 +142,9 @@ TaskRow::TaskRow(
 		).arg(st::settingsDownloadCenterRowInfoFg->c.name())
 			.arg(st::settingsDownloadCenterRowFg->c.name()));
 	_menuButton->setFixedSize(28, st::settingsDownloadCenterRowHeight);
+	_menuButton->raise();
 	connect(_menuButton, &QToolButton::clicked, this, [=] {
+		LOG(("DLC: TaskRow id=%1 menuBtn clicked").arg(_taskId));
 		showMenu();
 	});
 }
@@ -150,15 +154,24 @@ void TaskRow::resizeEvent(QResizeEvent *e) {
 		const auto btnSize = _menuButton->size();
 		_menuButton->move(width() - btnSize.width(),
 			(height() - btnSize.height()) / 2);
+		_menuButton->raise();
 	}
 }
 void TaskRow::contextMenuEvent(QContextMenuEvent *e) {
+	LOG(("DLC: TaskRow id=%1 contextMenuEvent reason=%2 global=(%3,%4)")
+		.arg(_taskId)
+		.arg(int(e->reason()))
+		.arg(e->globalPos().x()).arg(e->globalPos().y()));
 	showMenu();
 	e->accept();
 }
 void TaskRow::showMenu() {
-	auto globalPos = QPoint(width() - 30, height() / 2);
-	_controller->showTaskMenu(mapToGlobal(globalPos), _taskId);
+	const auto globalPos = mapToGlobal(QPoint(width() - 30, height() / 2));
+	LOG(("DLC: TaskRow id=%1 showMenu global=(%2,%3) size=(%4x%5)")
+		.arg(_taskId)
+		.arg(globalPos.x()).arg(globalPos.y())
+		.arg(width()).arg(height()));
+	_controller->showTaskMenu(globalPos, _taskId);
 }
 void TaskRow::refreshFromTask(const Data::DownloadTask &task) {
 	_fileName = task.fileName.isEmpty()
@@ -380,31 +393,40 @@ void DownloadCenter::showTaskMenu(
 		Data::DownloadTaskId id) {
 	auto &downloadCenter = controller()->session().downloadCenter();
 	const auto *task = downloadCenter.task(id);
+	LOG(("DLC: showTaskMenu id=%1 found=%2 state=%3 pos=(%4,%5)")
+		.arg(id).arg(task ? "yes" : "no")
+		.arg(task ? int(task->state) : -1)
+		.arg(globalPos.x()).arg(globalPos.y()));
 	if (!task) {
 		return;
 	}
 	auto menu = base::make_unique_q<Ui::PopupMenu>(this);
 	if (task->state == Data::DownloadState::Completed) {
 		menu->addAction(tr::lng_download_center_action_open(tr::now), [=] {
+			LOG(("DLC: menu action OPEN id=%1").arg(id));
 			handleOpen(id);
 		});
 		menu->addAction(tr::lng_download_center_action_show_in_folder(tr::now), [=] {
+			LOG(("DLC: menu action SHOW_IN_FOLDER id=%1").arg(id));
 			handleShowInFolder(id);
 		});
 	}
 	if (task->state == Data::DownloadState::Downloading
 		|| task->state == Data::DownloadState::Queued) {
 		menu->addAction(tr::lng_download_center_action_pause(tr::now), [=] {
+			LOG(("DLC: menu action PAUSE id=%1").arg(id));
 			handlePause(id);
 		});
 	}
 	if (task->state == Data::DownloadState::Paused) {
 		menu->addAction(tr::lng_download_center_action_resume(tr::now), [=] {
+			LOG(("DLC: menu action RESUME id=%1").arg(id));
 			handleResume(id);
 		});
 	}
 	if (task->state == Data::DownloadState::Failed) {
 		menu->addAction(tr::lng_download_center_action_retry(tr::now), [=] {
+			LOG(("DLC: menu action RETRY id=%1").arg(id));
 			handleRetry(id);
 		});
 	}
@@ -412,27 +434,37 @@ void DownloadCenter::showTaskMenu(
 		|| task->state == Data::DownloadState::Paused
 		|| task->state == Data::DownloadState::Queued) {
 		menu->addAction(tr::lng_download_center_action_cancel(tr::now), [=] {
+			LOG(("DLC: menu action CANCEL id=%1").arg(id));
 			handleCancel(id);
 		});
 	}
 	menu->addAction(tr::lng_download_center_action_remove(tr::now), [=] {
+		LOG(("DLC: menu action REMOVE id=%1").arg(id));
 		handleRemove(id);
 	});
+	LOG(("DLC: about to popup menu at (%1,%2) actionsCount=%3")
+			.arg(globalPos.x()).arg(globalPos.y())
+			.arg(int(menu->actions().size())));
 	menu->popup(globalPos);
 }
 void DownloadCenter::handlePause(Data::DownloadTaskId id) {
+	LOG(("DLC: handlePause id=%1").arg(id));
 	controller()->session().downloadCenter().pause(id);
 }
 void DownloadCenter::handleResume(Data::DownloadTaskId id) {
+	LOG(("DLC: handleResume id=%1").arg(id));
 	controller()->session().downloadCenter().resume(id);
 }
 void DownloadCenter::handleCancel(Data::DownloadTaskId id) {
+	LOG(("DLC: handleCancel id=%1").arg(id));
 	controller()->session().downloadCenter().cancel(id);
 }
 void DownloadCenter::handleRetry(Data::DownloadTaskId id) {
+	LOG(("DLC: handleRetry id=%1").arg(id));
 	controller()->session().downloadCenter().retry(id);
 }
 void DownloadCenter::handleRemove(Data::DownloadTaskId id) {
+	LOG(("DLC: handleRemove id=%1").arg(id));
 	controller()->session().downloadCenter().remove(id);
 }
 void DownloadCenter::handleOpen(Data::DownloadTaskId id) {

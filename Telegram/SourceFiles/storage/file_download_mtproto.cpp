@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mtproto/mtp_instance.h"
 #include "mtproto/mtproto_config.h"
 #include "mtproto/mtproto_auth_key.h"
+#include "base/debug_log.h"
 mtpFileLoader::mtpFileLoader(
 		not_null<Main::Session*> session,
 		const StorageFileLocation &location,
@@ -134,6 +135,7 @@ int64 mtpFileLoader::takeNextRequestOffset() {
 bool mtpFileLoader::feedPart(int64 offset, const QByteArray &bytes) {
 	const auto buffer = bytes::make_span(bytes);
 	if (!writeResultPart(offset, buffer)) {
+		LOG(("MFL: feedPart WRITE_FAIL offset=%1 size=%2").arg(offset).arg(buffer.size()));
 		return false;
 	}
 	if (buffer.empty() || (buffer.size() % 1024)) { // bad next offset
@@ -144,8 +146,10 @@ bool mtpFileLoader::feedPart(int64 offset, const QByteArray &bytes) {
 	if (finished) {
 		removeFromQueue();
 		if (!finalizeResult()) {
+			LOG(("MFL: feedPart finalize_fail offset=%1").arg(offset));
 			return false;
 		}
+		LOG(("MFL: feedPart FINISHED offset=%1 size=%2").arg(offset).arg(buffer.size()));
 	} else {
 		notifyAboutProgress();
 	}
@@ -170,8 +174,16 @@ void mtpFileLoader::startLoading() {
 	if (_fileIsOpen) {
 		const auto existing = _file.size();
 		if (existing > _nextRequestOffset && existing <= _loadSize) {
+			LOG(("MFL: startLoading RESUME existing=%1 -> nextRequestOffset=%2 loadSize=%3 file=%4")
+				.arg(existing).arg(existing).arg(_loadSize).arg(_file.fileName()));
 			_nextRequestOffset = existing;
+		} else {
+			LOG(("MFL: startLoading NORMAL file=%1 existing=%2 nextReq=%3 loadSize=%4")
+				.arg(_file.fileName()).arg(existing).arg(_nextRequestOffset).arg(_loadSize));
 		}
+	} else {
+		LOG(("MFL: startLoading FILE_NOT_OPEN file=%1 nextReq=%2 loadSize=%3")
+			.arg(_file.fileName()).arg(_nextRequestOffset).arg(_loadSize));
 	}
 	addToQueue();
 }

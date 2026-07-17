@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "base/timer.h"
 #include "base/weak_ptr.h"
+#include "base/debug_log.h"
 #include "core/application.h"
 #include "settings.h"
 #include "crl/crl_on_main.h"
@@ -149,34 +150,44 @@ DownloadTaskId DownloadCenter::addPhoto(
 void DownloadCenter::pause(DownloadTaskId id) {
 	auto it = _tasks.find(id);
 	if (it == _tasks.end()) {
+		LOG(("DLC: pause id=%1 NOT_FOUND").arg(id));
 		return;
 	}
+	LOG(("DLC: pause id=%1 state=%2").arg(id).arg(int(it->second.state)));
 	if (it->second.state != DownloadState::Downloading
 		&& it->second.state != DownloadState::Queued) {
 		return;
 	}
 	const auto controllerIt = _controllers.find(id);
 	if (controllerIt != _controllers.end()) {
+		LOG(("DLC: pause id=%1 has_controller, calling controller->pause").arg(id));
 		controllerIt->second->pause();
+		LOG(("DLC: pause id=%1 controller->pause returned").arg(id));
 	} else {
+		LOG(("DLC: pause id=%1 NO_CONTROLLER, stopTask").arg(id));
 		stopTask(id);
 	}
 	setState(id, DownloadState::Paused);
+	LOG(("DLC: pause id=%1 done, state=Paused").arg(id));
 }
 void DownloadCenter::resume(DownloadTaskId id) {
 	auto it = _tasks.find(id);
 	if (it == _tasks.end()) {
+		LOG(("DLC: resume id=%1 NOT_FOUND").arg(id));
 		return;
 	}
+	LOG(("DLC: resume id=%1 state=%2").arg(id).arg(int(it->second.state)));
 	if (it->second.state != DownloadState::Paused
 		&& it->second.state != DownloadState::Failed) {
 		return;
 	}
 	const auto controllerIt = _controllers.find(id);
 	if (controllerIt != _controllers.end()) {
+		LOG(("DLC: resume id=%1 has_controller, calling controller->start").arg(id));
 		const auto weak = base::make_weak(this);
 		controllerIt->second->start(
 			[=](bool ok, const QString &error) {
+				LOG(("DLC: resume id=%1 onFinished ok=%2 err=%3").arg(id).arg(ok).arg(error));
 				crl::on_main([=] {
 					if (const auto strong = weak.get()) {
 						strong->onControllerFinished(id, ok, error);
@@ -184,14 +195,18 @@ void DownloadCenter::resume(DownloadTaskId id) {
 				});
 			},
 			[=](int64 ready, int64 total) {
+				LOG(("DLC: resume id=%1 onProgress ready=%2 total=%3").arg(id).arg(ready).arg(total));
 				crl::on_main([=] {
 					if (const auto strong = weak.get()) {
 						strong->onControllerProgress(id, ready, total);
 					}
 				});
 			});
+		LOG(("DLC: resume id=%1 controller->start returned").arg(id));
 		setState(id, DownloadState::Downloading);
+		LOG(("DLC: resume id=%1 done, state=Downloading").arg(id));
 	} else {
+		LOG(("DLC: resume id=%1 NO_CONTROLLER, startTask").arg(id));
 		setState(id, DownloadState::Queued);
 		startTask(id);
 	}
@@ -218,15 +233,23 @@ void DownloadCenter::retry(DownloadTaskId id) {
 	startTask(id);
 }
 void DownloadCenter::remove(DownloadTaskId id) {
+	LOG(("DLC: remove id=%1 enter").arg(id));
 	auto it = _tasks.find(id);
 	if (it == _tasks.end()) {
+		LOG(("DLC: remove id=%1 NOT_FOUND").arg(id));
 		return;
 	}
 	const auto savePath = it->second.savePath;
+	const auto stateBefore = it->second.state;
+	LOG(("DLC: remove id=%1 state=%2 savePath=%3").arg(id).arg(int(stateBefore)).arg(savePath));
 	if (it->second.state == DownloadState::Downloading) {
+		LOG(("DLC: remove id=%1 stopTask").arg(id));
 		stopTask(id);
+		LOG(("DLC: remove id=%1 stopTask done").arg(id));
 	}
+	LOG(("DLC: remove id=%1 _tasks.erase").arg(id));
 	_tasks.erase(it);
+	LOG(("DLC: remove id=%1 _controllers.erase").arg(id));
 	_controllers.erase(id);
 	if (!savePath.isEmpty()) {
 		const auto baseInfo = QFileInfo(savePath);
@@ -237,6 +260,7 @@ void DownloadCenter::remove(DownloadTaskId id) {
 			const auto entries = dir.entryInfoList(
 				QStringList(u"%1.part*.tmp"_q.arg(baseName)),
 				QDir::Files);
+			LOG(("DLC: remove id=%1 cleanup temp files count=%2").arg(id).arg(entries.size()));
 			for (const auto &entry : entries) {
 				QFile::remove(entry.absoluteFilePath());
 			}
@@ -244,6 +268,7 @@ void DownloadCenter::remove(DownloadTaskId id) {
 	}
 	_taskRemoved.fire_copy(id);
 	scheduleSave();
+	LOG(("DLC: remove id=%1 done").arg(id));
 }
 void DownloadCenter::openFile(DownloadTaskId id) {
 	const auto it = _tasks.find(id);
@@ -314,14 +339,18 @@ int DownloadCenter::totalCount() const {
 	return int(_tasks.size());
 }
 void DownloadCenter::startTask(DownloadTaskId id) {
+	LOG(("DLC: startTask id=%1 enter").arg(id));
 	const auto it = _tasks.find(id);
 	if (it == _tasks.end()) {
+		LOG(("DLC: startTask id=%1 NOT_FOUND").arg(id));
 		return;
 	}
 	if (it->second.state != DownloadState::Queued) {
+		LOG(("DLC: startTask id=%1 wrong_state=%2").arg(id).arg(int(it->second.state)));
 		return;
 	}
 	if (_controllers.contains(id)) {
+		LOG(("DLC: startTask id=%1 has_controller already").arg(id));
 		return;
 	}
 	auto args = Storage::ParallelDownloadController::Args{
@@ -340,16 +369,19 @@ void DownloadCenter::startTask(DownloadTaskId id) {
 				args.document = document;
 			}
 		if (!args.document) {
+			LOG(("DLC: startTask id=%1 no_document").arg(id));
 			return;
 		}
 		auto controller = std::make_unique<Storage::ParallelDownloadController>(
 			std::move(args));
 		if (!controller->startable()) {
+			LOG(("DLC: startTask id=%1 not_startable").arg(id));
 			return;
 		}
 		const auto weak = base::make_weak(this);
 		controller->start(
 			[=](bool ok, const QString &error) {
+				LOG(("DLC: startTask id=%1 controller_onFinished ok=%2").arg(id).arg(ok));
 				crl::on_main([=] {
 					if (const auto strong = weak.get()) {
 						strong->onControllerFinished(id, ok, error);
@@ -357,6 +389,7 @@ void DownloadCenter::startTask(DownloadTaskId id) {
 				});
 			},
 			[=](int64 ready, int64 total) {
+				LOG(("DLC: startTask id=%1 controller_onProgress ready=%2 total=%3").arg(id).arg(ready).arg(total));
 				crl::on_main([=] {
 					if (const auto strong = weak.get()) {
 						strong->onControllerProgress(id, ready, total);
@@ -364,23 +397,29 @@ void DownloadCenter::startTask(DownloadTaskId id) {
 				});
 			});
 		_controllers.insert({ id, std::move(controller) });
-			setState(id, DownloadState::Downloading);
+		setState(id, DownloadState::Downloading);
+		LOG(("DLC: startTask id=%1 controller inserted, state=Downloading").arg(id));
 }
 void DownloadCenter::stopTask(DownloadTaskId id) {
+	LOG(("DLC: stopTask id=%1").arg(id));
 	const auto it = _controllers.find(id);
 	if (it != _controllers.end()) {
 		it->second->stop();
 	}
 	_controllers.erase(id);
+	LOG(("DLC: stopTask id=%1 done").arg(id));
 }
 void DownloadCenter::onControllerFinished(
 		DownloadTaskId id,
 		bool ok,
 		const QString &error) {
+	LOG(("DLC: onControllerFinished id=%1 ok=%2 err=%3").arg(id).arg(ok).arg(error));
 	const auto it = _tasks.find(id);
 	if (it == _tasks.end()) {
+		LOG(("DLC: onControllerFinished id=%1 NOT_FOUND").arg(id));
 		return;
 	}
+	LOG(("DLC: onControllerFinished id=%1 erase_controller").arg(id));
 	_controllers.erase(id);
 	if (ok) {
 		it->second.savedAbsolutePath = it->second.savePath;
@@ -388,6 +427,7 @@ void DownloadCenter::onControllerFinished(
 	} else {
 		setState(id, DownloadState::Failed, error);
 	}
+	LOG(("DLC: onControllerFinished id=%1 done").arg(id));
 }
 void DownloadCenter::onControllerProgress(
 		DownloadTaskId id,

@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_document.h"
 #include "data/data_session.h"
 #include "main/main_session.h"
+#include "base/debug_log.h"
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 #include <QtCore/QDir>
@@ -25,8 +26,12 @@ int64 AlignUp(int64 value, int64 alignment) {
 } // namespace
 ParallelDownloadController::ParallelDownloadController(Args &&args)
 : _args(std::move(args)) {
+	LOG(("PDC: ctor toFile=%1 fullSize=%2 chunks=%3")
+		.arg(_args.toFile).arg(_args.fullSize).arg(_args.config.chunks));
 }
 ParallelDownloadController::~ParallelDownloadController() {
+	LOG(("PDC: dtor toFile=%1 started=%2 chunks=%3")
+		.arg(_args.toFile).arg(_started).arg(_chunks.size()));
 	if (!_started) {
 		return;
 	}
@@ -45,10 +50,15 @@ bool ParallelDownloadController::startable() const {
 void ParallelDownloadController::start(
 		FinishedCallback onFinished,
 		ProgressCallback onProgress) {
+	LOG(("PDC: start toFile=%1 started=%2 chunks=%3 onFinished=%4")
+		.arg(_args.toFile).arg(_started).arg(_chunks.size())
+		.arg(onFinished ? "set" : "null"));
 	if (_started) {
+		LOG(("PDC: start ALREADY_STARTED, return"));
 		return;
 	}
 	if (!startable()) {
+		LOG(("PDC: start NOT_STARTABLE"));
 		if (onFinished) {
 			onFinished(false, u"Invalid download parameters"_q);
 		}
@@ -58,12 +68,19 @@ void ParallelDownloadController::start(
 	_onFinished = std::move(onFinished);
 	_onProgress = std::move(onProgress);
 	if (_chunks.empty()) {
+		LOG(("PDC: start prepareChunks first time"));
 		prepareChunks();
 	} else {
+		LOG(("PDC: start RESUME chunks.size=%1").arg(_chunks.size()));
 		for (auto &chunk : _chunks) {
 			if (chunk.finished) {
+				LOG(("PDC: start chunk[%1] FINISHED, skip").arg(chunk.startOffset));
 				continue;
 			}
+			const auto tempSize = QFileInfo(chunk.tempFilePath).size();
+			LOG(("PDC: start chunk[%1-%2] reloading loader, tempFile=%3 size=%4 ready=%5")
+				.arg(chunk.startOffset).arg(chunk.endOffset)
+				.arg(chunk.tempFilePath).arg(tempSize).arg(chunk.ready));
 			chunk.loader = _args.document->createFileLoaderForParallel(
 				_args.origin,
 				chunk.tempFilePath,
@@ -73,16 +90,20 @@ void ParallelDownloadController::start(
 		}
 	}
 	if (_chunks.empty()) {
+		LOG(("PDC: start EMPTY_CHUNKS"));
 		finish(false, u"No chunks created"_q);
 		return;
 	}
 	for (auto &chunk : _chunks) {
 		if (!chunk.finished) {
+			LOG(("PDC: start startChunk[%1-%2]").arg(chunk.startOffset).arg(chunk.endOffset));
 			startChunk(chunk);
 		}
 	}
+	LOG(("PDC: start done"));
 }
 void ParallelDownloadController::stop() {
+	LOG(("PDC: stop started=%1 chunks=%2").arg(_started).arg(_chunks.size()));
 	if (!_started) {
 		return;
 	}
@@ -92,19 +113,23 @@ void ParallelDownloadController::stop() {
 		}
 	}
 	_started = false;
+	LOG(("PDC: stop done"));
 }
 void ParallelDownloadController::pause() {
+	LOG(("PDC: pause started=%1 chunks=%2").arg(_started).arg(_chunks.size()));
 	if (!_started) {
 		return;
 	}
 	for (auto &chunk : _chunks) {
 		if (chunk.loader && !chunk.finished) {
 			chunk.ready = chunk.loader->currentOffset();
+			LOG(("PDC: pause chunk[%1] saved ready=%2").arg(chunk.startOffset).arg(chunk.ready));
 			chunk.loader->cancel();
 			chunk.loader.reset();
 		}
 	}
 	_started = false;
+	LOG(("PDC: pause done"));
 }
 int64 ParallelDownloadController::readySize() const {
 	int64 result = 0;
@@ -216,7 +241,10 @@ void ParallelDownloadController::onChunkFinished(
 		int index,
 		bool ok,
 		const QString &error) {
+	LOG(("PDC: onChunkFinished index=%1 ok=%2 err=%3").arg(index).arg(ok).arg(error));
 	if (!_started || index < 0 || index >= int(_chunks.size())) {
+		LOG(("PDC: onChunkFinished IGNORE index=%1 started=%2 chunks=%3")
+			.arg(index).arg(_started).arg(_chunks.size()));
 		return;
 	}
 	auto &chunk = _chunks[index];
@@ -252,12 +280,15 @@ void ParallelDownloadController::onChunkFinished(
 	finish(true, QString());
 }
 void ParallelDownloadController::finish(bool ok, const QString &error) {
+	LOG(("PDC: finish ok=%1 err=%2").arg(ok).arg(error));
 	if (!_started) {
+		LOG(("PDC: finish NOT_STARTED"));
 		return;
 	}
 	_started = false;
 	if (ok) {
 		if (!concatenateChunks()) {
+			LOG(("PDC: concatenate FAILED"));
 			ok = false;
 		}
 	}
