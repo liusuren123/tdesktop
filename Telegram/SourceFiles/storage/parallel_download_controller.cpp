@@ -216,9 +216,9 @@ void ParallelDownloadController::startChunk(Chunk &chunk) {
 				});
 			},
 			[=](FileLoader::Error error) {
-				auto message = error.failureReason == FileLoader::FailureReason::FileWriteFailure
-					? u"File write failure"_q
-					: u"Download failed"_q;
+							auto message = error.failureReason == FileLoader::FailureReason::FileWriteFailure
+								? u"File write failure"_q
+								: u"Download failed. The file may no longer be available - open the source chat and retry."_q;
 				crl::on_main([=] {
 					if (const auto strong = weak.get()) {
 						strong->onChunkFinished(id, false, message);
