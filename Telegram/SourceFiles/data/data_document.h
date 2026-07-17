@@ -113,11 +113,12 @@ public:
 			LoadFromCloudSetting fromCloud = LoadFromCloudOrLocal,
 			bool autoLoading = false);
 		[[nodiscard]] std::unique_ptr<class FileLoader> createFileLoaderForParallel(
-			Data::FileOrigin origin,
-			const QString &toFile,
-			int64 loadSize,
-			int64 startOffset,
-			LoadFromCloudSetting fromCloud = LoadFromCloudOrLocal);
+					Data::FileOrigin origin,
+					const QString &toFile,
+					int64 loadSize,
+					int64 startOffset,
+					int64 fullSizeOverride = 0,
+					LoadFromCloudSetting fromCloud = LoadFromCloudOrLocal);
 	void cancel();
 	[[nodiscard]] bool cancelled() const;
 	void resetCancelled();

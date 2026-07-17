@@ -1229,50 +1229,56 @@ void DocumentData::handleLoaderUpdates() {
 				}, _loader->lifetime());
 			}
 		std::unique_ptr<FileLoader> DocumentData::createFileLoaderForParallel(
-				Data::FileOrigin origin,
-				const QString &toFile,
-				int64 loadSize,
-				int64 startOffset,
-				LoadFromCloudSetting fromCloud) {
-			Expects(!isNull());
-			Expects(loadSize > 0);
-			Expects(startOffset >= 0);
-			if (hasWebLocation()) {
-				return std::make_unique<mtpFileLoader>(
-					&session(),
-					_urlLocation,
-					loadSize,
-					int64(size),
-					fromCloud,
-					false,
-					cacheTag());
-			} else if (!_access && !_url.isEmpty()) {
-				return nullptr;
-			}
-			const auto chunkEnd = startOffset + loadSize;
-				auto loader = std::make_unique<mtpFileLoader>(
-					&session(),
-					StorageFileLocation(
-						_dc,
-						session().userId(),
-						MTP_inputDocumentFileLocation(
-							MTP_long(id),
-							MTP_long(_access),
-							MTP_bytes(_fileReference),
-							MTP_string())),
-					origin,
-					locationType(),
-					toFile,
-					chunkEnd,
-					int64(size),
-					(saveToCache() ? LoadToCacheAsWell : LoadToFileOnly),
-					fromCloud,
-					false,
-					cacheTag(),
-					startOffset);
-			loader->permitLoadFromCloud();
-			return loader;
-		}
+					Data::FileOrigin origin,
+					const QString &toFile,
+					int64 loadSize,
+					int64 startOffset,
+					int64 fullSizeOverride,
+					LoadFromCloudSetting fromCloud) {
+					Expects(!isNull());
+					Expects(loadSize > 0);
+					Expects(startOffset >= 0);
+					// DocumentData::size may be 0 if the document hasn't been loaded
+					// from a message yet (e.g. on restart before the chat is opened).
+					// The caller can supply the real size via fullSizeOverride; if
+					// not given we fall back to the document's size.
+					const auto fullSize = (fullSizeOverride > 0) ? fullSizeOverride : int64(size);
+					if (hasWebLocation()) {
+						return std::make_unique<mtpFileLoader>(
+							&session(),
+							_urlLocation,
+							loadSize,
+							fullSize,
+							fromCloud,
+							false,
+							cacheTag());
+					} else if (!_access && !_url.isEmpty()) {
+						return nullptr;
+					}
+					const auto chunkEnd = startOffset + loadSize;
+						auto loader = std::make_unique<mtpFileLoader>(
+							&session(),
+							StorageFileLocation(
+								_dc,
+								session().userId(),
+								MTP_inputDocumentFileLocation(
+									MTP_long(id),
+									MTP_long(_access),
+									MTP_bytes(_fileReference),
+									MTP_string())),
+							origin,
+							locationType(),
+							toFile,
+							chunkEnd,
+							fullSize,
+							(saveToCache() ? LoadToCacheAsWell : LoadToFileOnly),
+							fromCloud,
+							false,
+							cacheTag(),
+							startOffset);
+					loader->permitLoadFromCloud();
+					return loader;
+				}
 void DocumentData::cancel() {
 	if (!loading()) {
 		return;

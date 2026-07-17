@@ -86,11 +86,12 @@ void ParallelDownloadController::start(
 				.arg(chunk.startOffset).arg(chunk.endOffset)
 				.arg(chunk.tempFilePath).arg(tempSize).arg(chunk.ready));
 			chunk.loader = _args.document->createFileLoaderForParallel(
-				_args.origin,
-				chunk.tempFilePath,
-				chunk.endOffset - chunk.startOffset,
-				chunk.startOffset,
-				LoadFromCloudOrLocal);
+								_args.origin,
+								chunk.tempFilePath,
+								chunk.endOffset - chunk.startOffset,
+								chunk.startOffset,
+								_args.fullSize,
+								LoadFromCloudOrLocal);
 		}
 	}
 	if (_chunks.empty()) {
@@ -189,11 +190,12 @@ void ParallelDownloadController::prepareChunks() {
 		chunk.tempFilePath = QDir(dir).absoluteFilePath(
 			u"%1.part%2.%3.tmp"_q.arg(fileName).arg(i).arg(stamp));
 		chunk.loader = _args.document->createFileLoaderForParallel(
-					_args.origin,
-					chunk.tempFilePath,
-					chunkLength,
-					startOffset,
-					LoadFromCloudOrLocal);
+							_args.origin,
+							chunk.tempFilePath,
+							chunkLength,
+							startOffset,
+							_args.fullSize,
+							LoadFromCloudOrLocal);
 				if (!chunk.loader) {
 					_chunks.clear();
 					return;
