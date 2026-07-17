@@ -33,6 +33,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QFileInfo>
 #include <QtGui/QAction>
 #include <QtGui/QMouseEvent>
+#include <QtWidgets/QToolButton>
 namespace Settings {
 namespace {
 using namespace Builder;
@@ -66,9 +67,9 @@ QString StateLabel(Data::DownloadState state) {
 class TaskRow : public Ui::RippleButton {
 public:
 	TaskRow(
-		QWidget *parent,
-		not_null<DownloadCenter*> controller,
-		Data::DownloadTaskId taskId);
+			QWidget *parent,
+			not_null<DownloadCenter*> controller,
+			Data::DownloadTaskId taskId);
 
 	[[nodiscard]] Data::DownloadTaskId taskId() const {
 		return _taskId;
@@ -78,14 +79,15 @@ public:
 
 protected:
 	void contextMenuEvent(QContextMenuEvent *e) override;
-	void mousePressEvent(QMouseEvent *e) override;
 	void paintEvent(QPaintEvent *e) override;
+	void resizeEvent(QResizeEvent *e) override;
 
 private:
-	QPoint _lastMenuPosition;
-private:
+	void showMenu();
+
 	not_null<DownloadCenter*> _controller;
 	Data::DownloadTaskId _taskId = 0;
+	object_ptr<QToolButton> _menuButton = { nullptr };
 	QString _fileName;
 	QString _infoLine;
 	float64 _progress = 0.;
@@ -126,27 +128,37 @@ TaskRow::TaskRow(
 	Data::DownloadTaskId taskId)
 : RippleButton(parent, st::defaultRippleAnimation)
 , _controller(controller)
-, _taskId(taskId) {
+, _taskId(taskId)
+, _menuButton(this) {
 	resize(width(), st::settingsDownloadCenterRowHeight);
 	setAcceptBoth(true);
-	setContextMenuPolicy(Qt::CustomContextMenu);
-	connect(this, &QWidget::customContextMenuRequested, this,
-		[=](QPoint pos) {
-			_controller->showTaskMenu(mapToGlobal(pos), _taskId);
-		});
+	_menuButton->setText(u"\u22EE"_q);
+		_menuButton->setCursor(Qt::PointingHandCursor);
+		_menuButton->setStyleSheet(QString(
+			"QToolButton{border:none;background:transparent;font-size:18px;color:%1;}"
+			"QToolButton:hover{color:%2;}"
+		).arg(st::settingsDownloadCenterRowInfoFg->c.name())
+			.arg(st::settingsDownloadCenterRowFg->c.name()));
+	_menuButton->setFixedSize(28, st::settingsDownloadCenterRowHeight);
+	connect(_menuButton, &QToolButton::clicked, this, [=] {
+		showMenu();
+	});
+}
+void TaskRow::resizeEvent(QResizeEvent *e) {
+	RippleButton::resizeEvent(e);
+	if (_menuButton) {
+		const auto btnSize = _menuButton->size();
+		_menuButton->move(width() - btnSize.width(),
+			(height() - btnSize.height()) / 2);
+	}
 }
 void TaskRow::contextMenuEvent(QContextMenuEvent *e) {
-	_controller->showTaskMenu(e->globalPos(), _taskId);
+	showMenu();
 	e->accept();
 }
-
-void TaskRow::mousePressEvent(QMouseEvent *e) {
-	if (e->button() == Qt::RightButton) {
-		_controller->showTaskMenu(e->globalPos(), _taskId);
-		e->accept();
-		return;
-	}
-	RippleButton::mousePressEvent(e);
+void TaskRow::showMenu() {
+	auto globalPos = QPoint(width() - 30, height() / 2);
+	_controller->showTaskMenu(mapToGlobal(globalPos), _taskId);
 }
 void TaskRow::refreshFromTask(const Data::DownloadTask &task) {
 	_fileName = task.fileName.isEmpty()
@@ -176,26 +188,28 @@ void TaskRow::paintEvent(QPaintEvent *e) {
 	const auto inner = rect().marginsRemoved(padding);
 	const auto leftColWidth = 64;
 	const auto textLeft = inner.left() + leftColWidth;
+	const auto menuBtnWidth = _menuButton ? _menuButton->width() : 0;
+	const auto textRight = inner.right() - menuBtnWidth;
 	p.setPen(st::settingsDownloadCenterRowFg);
 		p.setFont(st::semiboldTextStyle.font);
 		const auto nameMetrics = p.fontMetrics();
 		const auto nameHeight = nameMetrics.height();
 		p.drawText(
-			QRect(textLeft, inner.top(), width() - textLeft - inner.left(), nameHeight),
+			QRect(textLeft, inner.top(), textRight - textLeft, nameHeight),
 			Qt::AlignLeft | Qt::TextSingleLine,
 			_fileName);
 		p.setPen(st::settingsDownloadCenterRowInfoFg);
 		p.setFont(st::normalFont);
 	const auto infoY = inner.top() + nameHeight + 2;
 	p.drawText(
-		QRect(textLeft, infoY, width() - textLeft - inner.left(), nameMetrics.height()),
+		QRect(textLeft, infoY, textRight - textLeft, nameMetrics.height()),
 		Qt::AlignLeft | Qt::TextSingleLine,
 		_infoLine);
 	if (_totalSize > 0
 		&& (_state == Data::DownloadState::Downloading
 			|| _state == Data::DownloadState::Paused)) {
 		const auto barY = infoY + nameMetrics.height() + 6;
-		const auto barRect = QRect(textLeft, barY, width() - textLeft - inner.left(), 4);
+		const auto barRect = QRect(textLeft, barY, textRight - textLeft, 4);
 		p.setPen(Qt::NoPen);
 		p.setBrush(st::settingsDownloadCenterRowProgressBg);
 		p.drawRoundedRect(barRect, 2, 2);
