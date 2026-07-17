@@ -17,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/labels.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/widgets/menu/menu_add_action_callback.h"
+#include "ui/ui_utility.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/padding_wrap.h"
@@ -35,6 +36,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QAction>
 #include <QtGui/QMouseEvent>
 #include <QtWidgets/QToolButton>
+#include <QtWidgets/QMenu>
 namespace Settings {
 namespace {
 using namespace Builder;
@@ -79,16 +81,16 @@ public:
 	void refreshFromTask(const Data::DownloadTask &task);
 
 protected:
-	void contextMenuEvent(QContextMenuEvent *e) override;
 	void paintEvent(QPaintEvent *e) override;
 	void resizeEvent(QResizeEvent *e) override;
 
 private:
-	void showMenu();
+	void rebuildMenu();
 
 	not_null<DownloadCenter*> _controller;
 	Data::DownloadTaskId _taskId = 0;
 	object_ptr<QToolButton> _menuButton = { nullptr };
+	object_ptr<QMenu> _menu = { nullptr };
 	QString _fileName;
 	QString _infoLine;
 	float64 _progress = 0.;
@@ -111,7 +113,6 @@ private:
 	void onTaskUpdated(Data::DownloadTaskId id);
 	void onTaskRemoved(Data::DownloadTaskId id);
 	void onTasksReloaded();
-	void showTaskMenu(QPoint globalPos, Data::DownloadTaskId id);
 	void handlePause(Data::DownloadTaskId id);
 	void handleResume(Data::DownloadTaskId id);
 	void handleCancel(Data::DownloadTaskId id);
@@ -130,23 +131,24 @@ TaskRow::TaskRow(
 : RippleButton(parent, st::defaultRippleAnimation)
 , _controller(controller)
 , _taskId(taskId)
-, _menuButton(this) {
+, _menuButton(this)
+, _menu(this) {
 	LOG(("DLC: TaskRow ctor id=%1 parent=%2").arg(_taskId).arg((quintptr)parent));
 	resize(width(), st::settingsDownloadCenterRowHeight);
 	setAcceptBoth(true);
 	_menuButton->setText(u"\u22EE"_q);
-		_menuButton->setCursor(Qt::PointingHandCursor);
-		_menuButton->setStyleSheet(QString(
-			"QToolButton{border:none;background:transparent;font-size:18px;color:%1;}"
-			"QToolButton:hover{color:%2;}"
-		).arg(st::settingsDownloadCenterRowInfoFg->c.name())
-			.arg(st::settingsDownloadCenterRowFg->c.name()));
+	_menuButton->setCursor(Qt::PointingHandCursor);
+	_menuButton->setStyleSheet(QString(
+		"QToolButton{border:none;background:transparent;font-size:18px;color:%1;padding:0;}"
+		"QToolButton:hover{color:%2;}"
+		"QToolButton::menu-indicator{image:none;}"
+	).arg(st::settingsDownloadCenterRowInfoFg->c.name())
+		.arg(st::settingsDownloadCenterRowFg->c.name()));
 	_menuButton->setFixedSize(28, st::settingsDownloadCenterRowHeight);
+	_menuButton->setPopupMode(QToolButton::InstantPopup);
 	_menuButton->raise();
-	connect(_menuButton, &QToolButton::clicked, this, [=] {
-		LOG(("DLC: TaskRow id=%1 menuBtn clicked").arg(_taskId));
-		showMenu();
-	});
+	_menuButton->setMenu(_menu);
+	rebuildMenu();
 }
 void TaskRow::resizeEvent(QResizeEvent *e) {
 	RippleButton::resizeEvent(e);
@@ -157,23 +159,51 @@ void TaskRow::resizeEvent(QResizeEvent *e) {
 		_menuButton->raise();
 	}
 }
-void TaskRow::contextMenuEvent(QContextMenuEvent *e) {
-	LOG(("DLC: TaskRow id=%1 contextMenuEvent reason=%2 global=(%3,%4)")
-		.arg(_taskId)
-		.arg(int(e->reason()))
-		.arg(e->globalPos().x()).arg(e->globalPos().y()));
-	showMenu();
-	e->accept();
-}
-void TaskRow::showMenu() {
-	const auto globalPos = mapToGlobal(QPoint(width() - 30, height() / 2));
-	LOG(("DLC: TaskRow id=%1 showMenu global=(%2,%3) size=(%4x%5)")
-		.arg(_taskId)
-		.arg(globalPos.x()).arg(globalPos.y())
-		.arg(width()).arg(height()));
-	_controller->showTaskMenu(globalPos, _taskId);
+void TaskRow::rebuildMenu() {
+	if (!_menu) return;
+	_menu->clear();
+	auto &downloadCenter = _controller->controller()->session().downloadCenter();
+	const auto *task = downloadCenter.task(_taskId);
+	if (!task) return;
+	const auto id = _taskId;
+	const auto state = task->state;
+	if (state == Data::DownloadState::Completed) {
+		_menu->addAction(tr::lng_download_center_action_open(tr::now), [=] {
+			_controller->handleOpen(id);
+		});
+		_menu->addAction(tr::lng_download_center_action_show_in_folder(tr::now), [=] {
+			_controller->handleShowInFolder(id);
+		});
+	}
+	if (state == Data::DownloadState::Downloading
+		|| state == Data::DownloadState::Queued) {
+		_menu->addAction(tr::lng_download_center_action_pause(tr::now), [=] {
+			_controller->handlePause(id);
+		});
+	}
+	if (state == Data::DownloadState::Paused) {
+		_menu->addAction(tr::lng_download_center_action_resume(tr::now), [=] {
+			_controller->handleResume(id);
+		});
+	}
+	if (state == Data::DownloadState::Failed) {
+		_menu->addAction(tr::lng_download_center_action_retry(tr::now), [=] {
+			_controller->handleRetry(id);
+		});
+	}
+	if (state == Data::DownloadState::Downloading
+		|| state == Data::DownloadState::Paused
+		|| state == Data::DownloadState::Queued) {
+		_menu->addAction(tr::lng_download_center_action_cancel(tr::now), [=] {
+			_controller->handleCancel(id);
+		});
+	}
+	_menu->addAction(tr::lng_download_center_action_remove(tr::now), [=] {
+		_controller->handleRemove(id);
+	});
 }
 void TaskRow::refreshFromTask(const Data::DownloadTask &task) {
+	const auto previousState = _state;
 	_fileName = task.fileName.isEmpty()
 		? QString::number(task.id)
 		: task.fileName;
@@ -191,7 +221,10 @@ void TaskRow::refreshFromTask(const Data::DownloadTask &task) {
 		sizeLine = FormatBytes(_readySize);
 	}
 	_infoLine = StateLabel(_state) + u" — " + sizeLine;
-		update();
+	if (previousState != _state) {
+		rebuildMenu();
+	}
+	update();
 	}
 void TaskRow::paintEvent(QPaintEvent *e) {
 	RippleButton::paintEvent(e);
@@ -387,65 +420,6 @@ void DownloadCenter::onTaskRemoved(Data::DownloadTaskId id) {
 }
 void DownloadCenter::onTasksReloaded() {
 	rebuildTaskList();
-}
-void DownloadCenter::showTaskMenu(
-		QPoint globalPos,
-		Data::DownloadTaskId id) {
-	auto &downloadCenter = controller()->session().downloadCenter();
-	const auto *task = downloadCenter.task(id);
-	LOG(("DLC: showTaskMenu id=%1 found=%2 state=%3 pos=(%4,%5)")
-		.arg(id).arg(task ? "yes" : "no")
-		.arg(task ? int(task->state) : -1)
-		.arg(globalPos.x()).arg(globalPos.y()));
-	if (!task) {
-		return;
-	}
-	auto menu = base::make_unique_q<Ui::PopupMenu>(this);
-	if (task->state == Data::DownloadState::Completed) {
-		menu->addAction(tr::lng_download_center_action_open(tr::now), [=] {
-			LOG(("DLC: menu action OPEN id=%1").arg(id));
-			handleOpen(id);
-		});
-		menu->addAction(tr::lng_download_center_action_show_in_folder(tr::now), [=] {
-			LOG(("DLC: menu action SHOW_IN_FOLDER id=%1").arg(id));
-			handleShowInFolder(id);
-		});
-	}
-	if (task->state == Data::DownloadState::Downloading
-		|| task->state == Data::DownloadState::Queued) {
-		menu->addAction(tr::lng_download_center_action_pause(tr::now), [=] {
-			LOG(("DLC: menu action PAUSE id=%1").arg(id));
-			handlePause(id);
-		});
-	}
-	if (task->state == Data::DownloadState::Paused) {
-		menu->addAction(tr::lng_download_center_action_resume(tr::now), [=] {
-			LOG(("DLC: menu action RESUME id=%1").arg(id));
-			handleResume(id);
-		});
-	}
-	if (task->state == Data::DownloadState::Failed) {
-		menu->addAction(tr::lng_download_center_action_retry(tr::now), [=] {
-			LOG(("DLC: menu action RETRY id=%1").arg(id));
-			handleRetry(id);
-		});
-	}
-	if (task->state == Data::DownloadState::Downloading
-		|| task->state == Data::DownloadState::Paused
-		|| task->state == Data::DownloadState::Queued) {
-		menu->addAction(tr::lng_download_center_action_cancel(tr::now), [=] {
-			LOG(("DLC: menu action CANCEL id=%1").arg(id));
-			handleCancel(id);
-		});
-	}
-	menu->addAction(tr::lng_download_center_action_remove(tr::now), [=] {
-		LOG(("DLC: menu action REMOVE id=%1").arg(id));
-		handleRemove(id);
-	});
-	LOG(("DLC: about to popup menu at (%1,%2) actionsCount=%3")
-			.arg(globalPos.x()).arg(globalPos.y())
-			.arg(int(menu->actions().size())));
-	menu->popup(globalPos);
 }
 void DownloadCenter::handlePause(Data::DownloadTaskId id) {
 	LOG(("DLC: handlePause id=%1").arg(id));
