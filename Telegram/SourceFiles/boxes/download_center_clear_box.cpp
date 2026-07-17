@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/buttons.h"
 #include "ui/text/text_utilities.h"
 #include "styles/style_layers.h"
+#include <vector>
 namespace Settings {
 void DownloadCenterClearBox(
 		not_null<Ui::GenericBox*> box,
@@ -25,20 +26,25 @@ void DownloadCenterClearBox(
 		: tr::lng_download_center_clear_all_title();
 	box->setTitle(title);
 	box->addButton(tr::lng_box_ok(), [=, &controller = controller] {
-		auto &center = controller->session().downloadCenter();
-		const auto want = kind;
-		for (const auto *task : center.tasks()) {
-			const auto remove = (want == DownloadCenterClearKind::All)
-				|| (want == DownloadCenterClearKind::Completed
-					&& task->state == Data::DownloadState::Completed)
-				|| (want == DownloadCenterClearKind::Failed
-					&& task->state == Data::DownloadState::Failed);
-			if (remove) {
-				center.remove(task->id);
+			auto &center = controller->session().downloadCenter();
+			const auto want = kind;
+			std::vector<Data::DownloadTaskId> toRemove;
+			toRemove.reserve(center.totalCount());
+			for (const auto *task : center.tasks()) {
+				const auto remove = (want == DownloadCenterClearKind::All)
+					|| (want == DownloadCenterClearKind::Completed
+						&& task->state == Data::DownloadState::Completed)
+					|| (want == DownloadCenterClearKind::Failed
+						&& task->state == Data::DownloadState::Failed);
+				if (remove) {
+					toRemove.push_back(task->id);
+				}
 			}
-		}
-		box->closeBox();
-	});
+			for (const auto id : toRemove) {
+				center.remove(id);
+			}
+			box->closeBox();
+		});
 	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
 }
 } // namespace Settings

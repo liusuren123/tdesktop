@@ -155,7 +155,12 @@ void DownloadCenter::pause(DownloadTaskId id) {
 		&& it->second.state != DownloadState::Queued) {
 		return;
 	}
-	stopTask(id);
+	const auto controllerIt = _controllers.find(id);
+	if (controllerIt != _controllers.end()) {
+		controllerIt->second->pause();
+	} else {
+		stopTask(id);
+	}
 	setState(id, DownloadState::Paused);
 }
 void DownloadCenter::resume(DownloadTaskId id) {
@@ -167,8 +172,29 @@ void DownloadCenter::resume(DownloadTaskId id) {
 		&& it->second.state != DownloadState::Failed) {
 		return;
 	}
-	setState(id, DownloadState::Queued);
-	startTask(id);
+	const auto controllerIt = _controllers.find(id);
+	if (controllerIt != _controllers.end()) {
+		const auto weak = base::make_weak(this);
+		controllerIt->second->start(
+			[=](bool ok, const QString &error) {
+				crl::on_main([=] {
+					if (const auto strong = weak.get()) {
+						strong->onControllerFinished(id, ok, error);
+					}
+				});
+			},
+			[=](int64 ready, int64 total) {
+				crl::on_main([=] {
+					if (const auto strong = weak.get()) {
+						strong->onControllerProgress(id, ready, total);
+					}
+				});
+			});
+		setState(id, DownloadState::Downloading);
+	} else {
+		setState(id, DownloadState::Queued);
+		startTask(id);
+	}
 }
 void DownloadCenter::cancel(DownloadTaskId id) {
 	auto it = _tasks.find(id);
@@ -196,11 +222,26 @@ void DownloadCenter::remove(DownloadTaskId id) {
 	if (it == _tasks.end()) {
 		return;
 	}
+	const auto savePath = it->second.savePath;
 	if (it->second.state == DownloadState::Downloading) {
 		stopTask(id);
 	}
 	_tasks.erase(it);
 	_controllers.erase(id);
+	if (!savePath.isEmpty()) {
+		const auto baseInfo = QFileInfo(savePath);
+		const auto baseDir = baseInfo.absolutePath();
+		const auto baseName = baseInfo.fileName();
+		if (!baseDir.isEmpty() && !baseName.isEmpty()) {
+			QDir dir(baseDir);
+			const auto entries = dir.entryInfoList(
+				QStringList(u"%1.part*.tmp"_q.arg(baseName)),
+				QDir::Files);
+			for (const auto &entry : entries) {
+				QFile::remove(entry.absoluteFilePath());
+			}
+		}
+	}
 	_taskRemoved.fire_copy(id);
 	scheduleSave();
 }
