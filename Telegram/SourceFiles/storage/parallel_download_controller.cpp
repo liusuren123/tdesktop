@@ -34,9 +34,6 @@ ParallelDownloadController::~ParallelDownloadController() {
 		if (chunk.loader) {
 			chunk.loader->cancel();
 		}
-		if (!chunk.tempFilePath.isEmpty()) {
-			QFile::remove(chunk.tempFilePath);
-		}
 	}
 }
 bool ParallelDownloadController::startable() const {
@@ -60,13 +57,29 @@ void ParallelDownloadController::start(
 	_started = true;
 	_onFinished = std::move(onFinished);
 	_onProgress = std::move(onProgress);
-	prepareChunks();
+	if (_chunks.empty()) {
+		prepareChunks();
+	} else {
+		for (auto &chunk : _chunks) {
+			if (chunk.finished) {
+				continue;
+			}
+			chunk.loader = _args.document->createFileLoaderForParallel(
+				_args.origin,
+				chunk.tempFilePath,
+				chunk.endOffset - chunk.startOffset,
+				chunk.startOffset,
+				LoadFromCloudOrLocal);
+		}
+	}
 	if (_chunks.empty()) {
 		finish(false, u"No chunks created"_q);
 		return;
 	}
 	for (auto &chunk : _chunks) {
-		startChunk(chunk);
+		if (!chunk.finished) {
+			startChunk(chunk);
+		}
 	}
 }
 void ParallelDownloadController::stop() {
@@ -76,6 +89,19 @@ void ParallelDownloadController::stop() {
 	for (auto &chunk : _chunks) {
 		if (chunk.loader && !chunk.finished) {
 			chunk.loader->cancel();
+		}
+	}
+	_started = false;
+}
+void ParallelDownloadController::pause() {
+	if (!_started) {
+		return;
+	}
+	for (auto &chunk : _chunks) {
+		if (chunk.loader && !chunk.finished) {
+			chunk.ready = chunk.loader->currentOffset();
+			chunk.loader->cancel();
+			chunk.loader.reset();
 		}
 	}
 	_started = false;

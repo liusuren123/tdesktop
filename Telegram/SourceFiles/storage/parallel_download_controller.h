@@ -42,7 +42,8 @@ public:
 		const ParallelDownloadController &) = delete;
 	[[nodiscard]] bool startable() const;
 	void start(FinishedCallback onFinished, ProgressCallback onProgress);
-	void stop();
+		void stop();
+		void pause();
 	[[nodiscard]] int64 readySize() const;
 	[[nodiscard]] int64 totalSize() const;
 	[[nodiscard]] int chunksCompleted() const;

@@ -167,6 +167,12 @@ bool mtpFileLoader::setWebFileSizeHook(int64 size) {
 	return false;
 }
 void mtpFileLoader::startLoading() {
+	if (_fileIsOpen) {
+		const auto existing = _file.size();
+		if (existing > _nextRequestOffset && existing <= _loadSize) {
+			_nextRequestOffset = existing;
+		}
+	}
 	addToQueue();
 }
 void mtpFileLoader::startLoadingWithPartial(const QByteArray &data) {
