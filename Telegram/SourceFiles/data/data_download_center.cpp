@@ -357,6 +357,30 @@ void DownloadCenter::startTask(DownloadTaskId id) {
 		LOG(("DLC: startTask id=%1 has_controller already").arg(id));
 		return;
 	}
+
+	// If totalSize was never refreshed (e.g. the user quit before the
+	// server reported the real file size), pick it up from DocumentData
+	// now so the chunk loader doesn't fire Expects(loadSize > 0).
+	if (it->second.totalSize <= 0
+			&& it->second.source == DownloadSource::Document) {
+		auto &owner = _session->data();
+		const auto document = owner.document(it->second.documentId);
+		if (document && document->size > 0) {
+			LOG(("DLC: startTask id=%1 refreshing totalSize from %2 to %3")
+				.arg(id)
+				.arg(it->second.totalSize)
+				.arg(document->size));
+			it->second.totalSize = document->size;
+			_taskUpdated.fire_copy(id);
+			scheduleSave();
+		}
+	}
+	if (it->second.totalSize <= 0) {
+		LOG(("DLC: startTask id=%1 totalSize still unknown, failing").arg(id));
+		setState(id, DownloadState::Failed,
+			u"File size unavailable, please retry"_q);
+		return;
+	}
 	auto args = Storage::ParallelDownloadController::Args{
 			.session = _session,
 			.origin = it->second.origin,
