@@ -23,6 +23,8 @@ namespace Ui {
 class FlatLabel;
 class DownloadsRow;
 
+class DownloadsTabButton;
+
 class DownloadsContent : public QWidget {
 public:
 	DownloadsContent(QWidget *parent);
@@ -85,7 +87,7 @@ private:
 	QPushButton *_sortButton = nullptr;
 	QPushButton *_viewToggleA = nullptr;
 	QPushButton *_viewToggleB = nullptr;
-	std::vector<QPushButton*> _tabButtons;
+	std::vector<DownloadsTabButton*> _tabButtons;
 
 	FlatLabel *_colName = nullptr;
 	FlatLabel *_colProgress = nullptr;

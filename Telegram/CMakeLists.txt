@@ -1952,6 +1952,10 @@ PRIVATE
     ui/widgets/downloads/downloads_section.h
     ui/widgets/downloads/downloads_status_badge.cpp
     ui/widgets/downloads/downloads_status_badge.h
+    ui/widgets/downloads/downloads_tab_button.cpp
+    ui/widgets/downloads/downloads_tab_button.h
+    ui/widgets/downloads/downloads_icon_button.cpp
+    ui/widgets/downloads/downloads_icon_button.h
     ui/widgets/peer_bubble.cpp
     ui/widgets/peer_bubble.h
     ui/countryinput.cpp

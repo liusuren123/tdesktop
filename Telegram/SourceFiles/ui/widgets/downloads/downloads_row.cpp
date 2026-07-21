@@ -15,8 +15,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_downloads_icons.h"
 
-#include <QtWidgets/QPushButton>
-
 #include <QtGui/QContextMenuEvent>
 #include <QtGui/QResizeEvent>
 
@@ -50,25 +48,11 @@ void DownloadsRow::setupLabels() {
 	_size = Ui::CreateChild<FlatLabel>(this, st::downloadsRowSize);
 	_date = Ui::CreateChild<FlatLabel>(this, st::downloadsRowDate);
 
-	const auto actionStyle = QStringLiteral(
-		"QPushButton { background: transparent; color: #888; border: none; font-size: 14px; }"
-		" QPushButton:hover { color: #fff; }");
-	_actionSave = Ui::CreateChild<QPushButton>(this);
-	_actionSave->setText(QString::fromUtf8("\xE2\xAC\x87"));
-	_actionSave->setFixedSize(28, 28);
-	_actionSave->setStyleSheet(actionStyle);
+	_actionSave = Ui::CreateChild<DownloadsIconButton>(this, st::downloadsActionSave);
+	_actionOpenFolder = Ui::CreateChild<DownloadsIconButton>(this, st::downloadsActionFolder);
+	_actionRemove = Ui::CreateChild<DownloadsIconButton>(this, st::downloadsActionTrash);
 
-	_actionOpenFolder = Ui::CreateChild<QPushButton>(this);
-	_actionOpenFolder->setText(QString::fromUtf8("\xF0\x9F\x93\x81"));
-	_actionOpenFolder->setFixedSize(28, 28);
-	_actionOpenFolder->setStyleSheet(actionStyle);
-
-	_actionRemove = Ui::CreateChild<QPushButton>(this);
-	_actionRemove->setText(QString::fromUtf8("\xF0\x9F\x97\x91"));
-	_actionRemove->setFixedSize(28, 28);
-	_actionRemove->setStyleSheet(actionStyle);
-
-	connect(_actionRemove, &QPushButton::clicked, this, [this] {
+	_actionRemove->setClickedCallback([this] {
 		_row.fileName.clear();
 		_row.percent = 0;
 		applySample();

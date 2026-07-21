@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/downloads/downloads_file_icon.h"
 #include "ui/widgets/downloads/downloads_status_badge.h"
 #include "ui/widgets/downloads/downloads_style.h"
+#include "ui/widgets/downloads/downloads_tab_button.h"
 
 #include <QtWidgets/QLayout>
 
@@ -86,46 +87,30 @@ void DownloadsContent::setupHeader() {
 }
 
 void DownloadsContent::setupTabs() {
-	const auto tabStyle = QStringLiteral(
-		"QPushButton { background: transparent; color: %1; border: none; padding: 0 6px; border-radius: 14px; }"
-		" QPushButton:hover { background: rgba(255,255,255,0.06); }"
-		" QPushButton:checked { background: rgba(42,171,238,0.18); color: #2AABEE; }"
-	).arg(QStringLiteral("#aaaaaa"));
+	struct Entry { QString label; const style::icon *icon; };
+	const Entry entries[] = {
+		{ tr::lng_downloads_tab_all(tr::now),   &st::downloadsTabAll },
+		{ tr::lng_downloads_tab_photos(tr::now),&st::downloadsTabPhotos },
+		{ tr::lng_downloads_tab_videos(tr::now),&st::downloadsTabVideos },
+		{ tr::lng_downloads_tab_files(tr::now), &st::downloadsTabFiles },
+		{ tr::lng_downloads_tab_music(tr::now), &st::downloadsTabMusic },
+		{ tr::lng_downloads_tab_links(tr::now), &st::downloadsTabLinks },
+		{ tr::lng_downloads_tab_voice(tr::now), &st::downloadsTabVoice },
+	};
 
 	for (size_t i = 0; i < _tabs.size(); ++i) {
-		auto button = Ui::CreateChild<QPushButton>(this);
-		button->setCheckable(true);
-		button->setAutoExclusive(true);
-		button->setCursor(Qt::PointingHandCursor);
-		button->setStyleSheet(tabStyle);
+		auto button = Ui::CreateChild<DownloadsTabButton>(this, *entries[i].icon, entries[i].label);
 		const auto index = int(i);
-		connect(button, &QPushButton::clicked, this, [this, index] {
+		button->setClickedCallback([this, button, index] {
 			_activeTab = index;
-			for (size_t j = 0; j < _tabButtons.size(); ++j) {
-				_tabButtons[j]->setChecked(j == size_t(index));
-			}
+			for (auto b : _tabButtons) b->setActive(false);
+			button->setActive(true);
 			rebuildVisible();
 		});
+		_tabs[i].label = entries[i].label;
 		_tabButtons.push_back(button);
 	}
-	_tabButtons[0]->setChecked(true);
-
-	auto labelFor = [&](int i) -> QString {
-		switch (i) {
-		case 0: return QString::fromUtf8("\xE2\xAC\x87 ") + tr::lng_downloads_tab_all(tr::now);
-		case 1: return QString::fromUtf8("\xF0\x9F\x93\xB7 ") + tr::lng_downloads_tab_photos(tr::now);
-		case 2: return QString::fromUtf8("\xF0\x9F\x8E\xAC ") + tr::lng_downloads_tab_videos(tr::now);
-		case 3: return QString::fromUtf8("\xF0\x9F\x93\x84 ") + tr::lng_downloads_tab_files(tr::now);
-		case 4: return QString::fromUtf8("\xF0\x9F\x8E\xB5 ") + tr::lng_downloads_tab_music(tr::now);
-		case 5: return QString::fromUtf8("\xF0\x9F\x93\x8E ") + tr::lng_downloads_tab_links(tr::now);
-		case 6: return QString::fromUtf8("\xF0\x9F\x8E\xA4 ") + tr::lng_downloads_tab_voice(tr::now);
-		}
-		return QString();
-	};
-	for (size_t i = 0; i < _tabs.size(); ++i) {
-		_tabs[i].label = labelFor(int(i));
-		_tabButtons[i]->setText(_tabs[i].label);
-	}
+	_tabButtons[0]->setActive(true);
 }
 
 void DownloadsContent::setupColumnHeaders() {
@@ -368,11 +353,10 @@ void DownloadsContent::resizeEvent(QResizeEvent *e) {
 	const auto tabPad = st::downloadsTabBarPadding;
 	auto tabX = tabPad;
 	for (size_t i = 0; i < _tabButtons.size(); ++i) {
-		_tabButtons[i]->adjustSize();
 		const auto btnWidth = _tabButtons[i]->sizeHint().width() + 12;
-		_tabButtons[i]->setFixedWidth(btnWidth);
-		_tabButtons[i]->setFixedHeight(st::downloadsTabBarHeight);
-		_tabButtons[i]->move(tabX, tabY);
+		_tabButtons[i]->setGeometry(tabX, tabY,
+			btnWidth, st::downloadsTabBarHeight);
+		_tabButtons[i]->setCount(countFor(int(i)));
 		tabX += btnWidth + st::downloadsTabGap;
 	}
 

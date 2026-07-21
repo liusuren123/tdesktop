@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/downloads/downloads_file_icon.h"
 #include "ui/widgets/downloads/downloads_status_badge.h"
 #include "ui/widgets/downloads/downloads_sample.h"
+#include "ui/widgets/downloads/downloads_icon_button.h"
 #include "ui/rp_widget.h"
 
 #include <QtCore/QString>
@@ -22,8 +23,6 @@ namespace Ui {
 class FlatLabel;
 
 } // namespace Ui
-
-class QPushButton;
 
 namespace Ui {
 
@@ -56,9 +55,9 @@ private:
 	FlatLabel *_statusText = nullptr;
 	FlatLabel *_size = nullptr;
 	FlatLabel *_date = nullptr;
-	QPushButton *_actionSave = nullptr;
-	QPushButton *_actionOpenFolder = nullptr;
-	QPushButton *_actionRemove = nullptr;
+	DownloadsIconButton *_actionSave = nullptr;
+	DownloadsIconButton *_actionOpenFolder = nullptr;
+	DownloadsIconButton *_actionRemove = nullptr;
 
 };
 

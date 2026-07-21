@@ -10,6 +10,17 @@ using "ui/widgets/widgets.style";
 
 menuIconDownloads: icon {{ "menu/download", menuIconColor }};
 
+downloadsTabAll: icon {{ "downloads/download_small", menuIconColor }};
+downloadsTabPhotos: icon {{ "downloads/photo", menuIconColor }};
+downloadsTabVideos: icon {{ "downloads/video", menuIconColor }};
+downloadsTabFiles: icon {{ "downloads/document", menuIconColor }};
+downloadsTabMusic: icon {{ "downloads/music", menuIconColor }};
+downloadsTabLinks: icon {{ "downloads/link", menuIconColor }};
+downloadsTabVoice: icon {{ "downloads/mic", menuIconColor }};
+downloadsActionSave: icon {{ "downloads/download_small", menuIconColor }};
+downloadsActionFolder: icon {{ "downloads/folder", menuIconColor }};
+downloadsActionTrash: icon {{ "downloads/trash", menuIconColor }};
+
 downloadsRowHeight: 70px;
 downloadsRowOuterPadding: 12px;
 downloadsRowHorizontalPadding: 16px;
