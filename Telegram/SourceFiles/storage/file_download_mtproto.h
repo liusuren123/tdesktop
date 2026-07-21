@@ -51,7 +51,9 @@ public:
 	~mtpFileLoader();
 	Data::FileOrigin fileOrigin() const override;
 	uint64 objId() const override;
-private:
+	[[nodiscard]] int64 readyForParallelChunk() const override;
+	[[nodiscard]] bool appendOnOpen() const override;
+	private:
 	Storage::Cache::Key cacheKey() const override;
 	std::optional<MediaKey> fileLocationKey() const override;
 	void startLoading() override;

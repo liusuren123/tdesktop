@@ -120,6 +120,12 @@ Data::FileOrigin mtpFileLoader::fileOrigin() const {
 uint64 mtpFileLoader::objId() const {
 	return DownloadMtprotoTask::objectId();
 }
+int64 mtpFileLoader::readyForParallelChunk() const {
+	return _nextRequestOffset;
+}
+bool mtpFileLoader::appendOnOpen() const {
+	return true;
+}
 bool mtpFileLoader::readyToRequest() const {
 	return !_finished
 		&& !_lastComplete
@@ -149,7 +155,6 @@ bool mtpFileLoader::feedPart(int64 offset, const QByteArray &bytes) {
 			LOG(("MFL: feedPart finalize_fail offset=%1").arg(offset));
 			return false;
 		}
-		LOG(("MFL: feedPart FINISHED offset=%1 size=%2").arg(offset).arg(buffer.size()));
 	} else {
 		notifyAboutProgress();
 	}

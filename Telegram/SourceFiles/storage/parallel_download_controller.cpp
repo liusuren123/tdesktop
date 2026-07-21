@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QFileInfo>
 #include <QtCore/QDir>
 #include <QtCore/QDateTime>
+#include <cerrno>
 namespace Storage {
 namespace {
 int64 AlignDown(int64 value, int64 alignment) {
@@ -38,9 +39,7 @@ ParallelDownloadController::~ParallelDownloadController() {
 	}
 	for (auto &chunk : _chunks) {
 		if (chunk.loader) {
-			LOG(("PDC: dtor cancelling chunk[%1]").arg(chunk.startOffset));
 			chunk.loader->cancel();
-			LOG(("PDC: dtor chunk[%1] cancelled").arg(chunk.startOffset));
 		}
 	}
 	LOG(("PDC: dtor done"));
@@ -78,16 +77,11 @@ void ParallelDownloadController::start(
 		LOG(("PDC: start RESUME chunks.size=%1").arg(_chunks.size()));
 		for (auto &chunk : _chunks) {
 			if (chunk.finished) {
-				LOG(("PDC: start chunk[%1] FINISHED, skip").arg(chunk.startOffset));
 				continue;
 			}
-			const auto tempSize = QFileInfo(chunk.tempFilePath).size();
-			LOG(("PDC: start chunk[%1-%2] reloading loader, tempFile=%3 size=%4 ready=%5")
-				.arg(chunk.startOffset).arg(chunk.endOffset)
-				.arg(chunk.tempFilePath).arg(tempSize).arg(chunk.ready));
 			chunk.loader = _args.document->createFileLoaderForParallel(
 								_args.origin,
-								chunk.tempFilePath,
+								_args.tempFilePath,
 								chunk.endOffset - chunk.startOffset,
 								chunk.startOffset,
 								_args.fullSize,
@@ -101,7 +95,6 @@ void ParallelDownloadController::start(
 	}
 	for (auto &chunk : _chunks) {
 		if (!chunk.finished) {
-			LOG(("PDC: start startChunk[%1-%2]").arg(chunk.startOffset).arg(chunk.endOffset));
 			startChunk(chunk);
 		}
 	}
@@ -114,9 +107,7 @@ void ParallelDownloadController::stop() {
 	}
 	for (auto &chunk : _chunks) {
 		if (chunk.loader && !chunk.finished) {
-			LOG(("PDC: stop cancelling chunk[%1]").arg(chunk.startOffset));
 			chunk.loader->cancel();
-			LOG(("PDC: stop chunk[%1] cancelled").arg(chunk.startOffset));
 		}
 	}
 	_started = false;
@@ -129,14 +120,26 @@ void ParallelDownloadController::pause() {
 	}
 	for (auto &chunk : _chunks) {
 		if (chunk.loader && !chunk.finished) {
-			chunk.ready = chunk.loader->currentOffset();
-			LOG(("PDC: pause chunk[%1] saved ready=%2").arg(chunk.startOffset).arg(chunk.ready));
+			chunk.ready = chunkReadyFromLoader(chunk);
 			chunk.loader->cancel();
 			chunk.loader.reset();
 		}
 	}
 	_started = false;
 	LOG(("PDC: pause done"));
+}
+int64 ParallelDownloadController::chunkReadyFromLoader(const Chunk &chunk) const {
+	int64 result = chunk.ready;
+	if (chunk.loader) {
+		const auto offset = chunk.loader->readyForParallelChunk();
+		const auto chunkLength = chunk.endOffset - chunk.startOffset;
+		const auto fromLoader = std::clamp(
+			offset - chunk.startOffset,
+			int64(0),
+			chunkLength);
+		result = std::max(result, fromLoader);
+	}
+	return result;
 }
 int64 ParallelDownloadController::readySize() const {
 	int64 result = 0;
@@ -157,6 +160,19 @@ int ParallelDownloadController::chunksCompleted() const {
 	}
 	return result;
 }
+std::vector<ChunkState> ParallelDownloadController::chunkStates() const {
+	auto result = std::vector<ChunkState>();
+	result.reserve(_chunks.size());
+	for (const auto &chunk : _chunks) {
+		auto state = ChunkState();
+		state.startOffset = chunk.startOffset;
+		state.endOffset = chunk.endOffset;
+		state.ready = chunkReadyFromLoader(chunk);
+		state.finished = chunk.finished;
+		result.push_back(std::move(state));
+	}
+	return result;
+}
 void ParallelDownloadController::prepareChunks() {
 	const auto totalSize = _args.fullSize;
 		auto chunksCount = _args.config.chunks;
@@ -167,11 +183,15 @@ void ParallelDownloadController::prepareChunks() {
 	const auto alignedPerChunk = std::max(
 		int64(Storage::kDownloadPartSize),
 		AlignDown(perChunk, Storage::kDownloadPartSize));
-	const auto basePath = _args.toFile;
-	const auto fileInfo = QFileInfo(basePath);
-	const auto dir = fileInfo.absolutePath();
-	const auto fileName = fileInfo.fileName();
-	const auto stamp = QDateTime::currentMSecsSinceEpoch();
+
+	// If the caller supplied persistent chunk state (loaded from the
+	// DownloadTask JSON after a Telegram restart), reuse those ready
+	// values. The temp file itself is the single _args.tempFilePath
+	// shared by all chunks - mtpFileLoader::startLoading detects its
+	// size and skips ahead to resume each chunk at the right offset.
+	const bool useInitial = (_args.initialChunks.size()
+			== size_t(chunksCount));
+
 	_chunks.clear();
 		_chunks.reserve(chunksCount);
 		for (int i = 0; i < chunksCount; ++i) {
@@ -187,19 +207,37 @@ void ParallelDownloadController::prepareChunks() {
 		auto chunk = Chunk();
 		chunk.startOffset = startOffset;
 		chunk.endOffset = endOffset;
-		chunk.tempFilePath = QDir(dir).absoluteFilePath(
-			u"%1.part%2.%3.tmp"_q.arg(fileName).arg(i).arg(stamp));
-		chunk.loader = _args.document->createFileLoaderForParallel(
-							_args.origin,
-							chunk.tempFilePath,
-							chunkLength,
-							startOffset,
-							_args.fullSize,
-							LoadFromCloudOrLocal);
-				if (!chunk.loader) {
-					_chunks.clear();
-					return;
-				}
+		if (useInitial) {
+			const auto &initial = _args.initialChunks[i];
+			chunk.ready = std::clamp(initial.ready,
+				int64(0),
+				chunkLength);
+			chunk.finished = initial.finished
+				|| (chunk.ready >= chunkLength);
+			if (chunk.finished) {
+				chunk.ready = chunkLength;
+			}
+			LOG(("PDC: prepareChunks part[%1] from_initial ready=%2 chunkLength=%3 finished=%4")
+				.arg(i)
+				.arg(chunk.ready).arg(chunkLength)
+				.arg(chunk.finished ? "yes" : "no"));
+		} else {
+			LOG(("PDC: prepareChunks part[%1] fresh chunkLength=%2")
+				.arg(i).arg(chunkLength));
+		}
+		if (!chunk.finished) {
+			chunk.loader = _args.document->createFileLoaderForParallel(
+								_args.origin,
+								_args.tempFilePath,
+								chunkLength,
+								chunk.startOffset,
+								_args.fullSize,
+								LoadFromCloudOrLocal);
+			if (!chunk.loader) {
+				_chunks.clear();
+				return;
+			}
+		}
 		_chunks.push_back(std::move(chunk));
 	}
 }
@@ -240,7 +278,7 @@ void ParallelDownloadController::onChunkProgress(int index) {
 		return;
 	}
 	auto &chunk = _chunks[index];
-	chunk.ready = chunk.loader->currentOffset();
+	chunk.ready = chunkReadyFromLoader(chunk);
 	if (_onProgress) {
 		_onProgress(readySize(), totalSize());
 	}
@@ -295,15 +333,20 @@ void ParallelDownloadController::finish(bool ok, const QString &error) {
 	}
 	_started = false;
 	if (ok) {
-		if (!concatenateChunks()) {
-			LOG(("PDC: concatenate FAILED"));
+		if (!finalizeDownload()) {
+			LOG(("PDC: finalize FAILED"));
 			ok = false;
 		}
 	}
+	// Note: the temp file is intentionally NOT deleted when the
+	// download fails. It is kept on disk so subsequent retries /
+	// resumes can pick up partial progress. Cleanup happens
+	// explicitly in DownloadCenter::remove() / DownloadCenter::cancel()
+	// when the user removes or cancels the task. On a successful
+	// finish the temp file has already been renamed away by
+	// finalizeDownload().
 	if (!ok) {
-		for (const auto &chunk : _chunks) {
-			QFile::remove(chunk.tempFilePath);
-		}
+		LOG(("PDC: finish not ok, keeping temp file for resume"));
 	}
 	auto callback = std::move(_onFinished);
 	_onFinished = nullptr;
@@ -312,51 +355,28 @@ void ParallelDownloadController::finish(bool ok, const QString &error) {
 		callback(ok, ok ? QString() : error);
 	}
 }
-bool ParallelDownloadController::concatenateChunks() {
+bool ParallelDownloadController::finalizeDownload() {
+	// All chunks wrote contiguously into a single temp file
+	// (_args.tempFilePath). The file's bytes are already in the right
+	// order - we just rename it to the final destination. If the
+	// rename fails (e.g. target already exists and is locked), we
+	// try removing the target first and retrying.
 	const auto finalPath = _args.toFile;
 	const auto finalInfo = QFileInfo(finalPath);
 	const auto finalDir = finalInfo.absolutePath();
 	if (!finalDir.isEmpty() && !QDir().exists(finalDir)) {
-		QDir().mkpath(finalDir);
+		if (!QDir().mkpath(finalDir)) {
+			return false;
+		}
 	}
-	auto output = QFile(finalPath);
-	if (!output.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+	if (QFile::exists(finalPath)) {
+		QFile::remove(finalPath);
+	}
+	if (!QFile::rename(_args.tempFilePath, finalPath)) {
+		LOG(("PDC: rename failed tempFile=%1 toFile=%2 err=%3")
+			.arg(_args.tempFilePath).arg(finalPath).arg(int(errno)));
 		return false;
 	}
-	for (const auto &chunk : _chunks) {
-			QString tempPath;
-			{
-				auto input = QFile(chunk.tempFilePath);
-				if (!input.open(QIODevice::ReadOnly)) {
-					return false;
-				}
-				if (!input.seek(chunk.startOffset)) {
-					return false;
-				}
-				constexpr auto kBufferSize = int64(256 * 1024);
-				auto buffer = QByteArray(int(kBufferSize), Qt::Uninitialized);
-				auto remaining = chunk.endOffset - chunk.startOffset;
-				while (remaining > 0) {
-					const auto toRead = std::min(int64(buffer.size()), remaining);
-					const auto read = input.read(buffer.data(), toRead);
-					if (read < 0) {
-						return false;
-					}
-					if (read == 0) {
-						break;
-					}
-					if (output.write(buffer.constData(), read) != read) {
-						return false;
-					}
-					remaining -= read;
-				}
-				tempPath = chunk.tempFilePath;
-			}
-			if (!tempPath.isEmpty()) {
-				QFile::remove(tempPath);
-			}
-		}
-	output.close();
 	return true;
 }
 } // namespace Storage

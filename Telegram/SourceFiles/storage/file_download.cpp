@@ -251,11 +251,18 @@ void FileLoader::start() {
 
 bool FileLoader::checkForOpen() {
 	if (_filename.isEmpty()
-		|| (_toCache != LoadToFileOnly)
-		|| _fileIsOpen) {
+			|| (_toCache != LoadToFileOnly)
+			|| _fileIsOpen) {
 		return true;
 	}
-	_fileIsOpen = _file.open(QIODevice::WriteOnly);
+	// mtpFileLoader (parallel chunks sharing one temp file) returns
+	// appendOnOpen() == true so the existing bytes are not truncated
+	// when a sibling loader opens the same path. Every other loader
+	// keeps the Qt-default behavior: WriteOnly alone, which in Qt 6
+	// implies Truncate.
+	const auto mode = QIODevice::WriteOnly
+		| (appendOnOpen() ? QIODevice::Append : QIODevice::Truncate);
+	_fileIsOpen = _file.open(mode);
 	if (_fileIsOpen) {
 		return true;
 	}
@@ -345,11 +352,23 @@ void FileLoader::cancel(FailureReason fail) {
 
 	_cancelled = true;
 	_finished = true;
-	if (_fileIsOpen) {
+	// Only remove the temp file on a real disk write failure: keeping it
+	// around lets a paused / failed chunk resume from the partial bytes
+	// on disk (the next loader that opens the same path will skip ahead
+	// to the existing file size). Network / API failures (OtherFailure)
+	// and explicit user pause / controller destruction (NoFailure) must
+	// preserve the partial progress so the user does not have to
+	// redownload everything after a transient file_reference expiry or
+	// a Telegram restart.
+	if (_fileIsOpen && fail == FailureReason::FileWriteFailure) {
 		_file.close();
 		_fileIsOpen = false;
 		const auto removed = _file.remove();
 		LOG(("FL: cancel removed temp file=%1 ok=%2").arg(_filename).arg(removed ? "yes" : "no"));
+	} else if (_fileIsOpen) {
+		_file.close();
+		_fileIsOpen = false;
+		LOG(("FL: cancel kept temp file=%1 fail=%2").arg(_filename).arg(int(fail)));
 	}
 	_data = QByteArray();
 
@@ -363,7 +382,6 @@ void FileLoader::cancel(FailureReason fail) {
 		_filename = QString();
 		_file.setFileName(_filename);
 	}
-	LOG(("FL: cancel done"));
 }
 
 int64 FileLoader::currentOffset() const {
@@ -413,15 +431,15 @@ bool FileLoader::writeResultPart(int64 offset, bytes::const_span buffer) {
 QByteArray FileLoader::readLoadedPartBack(int64 offset, int size) {
 	Expects(offset >= 0 && size > 0);
 
-	if (_fileIsOpen) {
-		if (_file.openMode() == QIODevice::WriteOnly) {
-			_file.close();
-			_fileIsOpen = _file.open(QIODevice::ReadWrite);
-			if (!_fileIsOpen) {
-				cancel(FailureReason::FileWriteFailure);
-				return QByteArray();
-			}
+	if (_fileIsOpen && !(_file.openMode() & QIODevice::ReadOnly)) {
+		_file.close();
+		_fileIsOpen = _file.open(QIODevice::ReadWrite);
+		if (!_fileIsOpen) {
+			cancel(FailureReason::FileWriteFailure);
+			return QByteArray();
 		}
+	}
+	if (_fileIsOpen) {
 		if (!_file.seek(offset)) {
 			return QByteArray();
 		}

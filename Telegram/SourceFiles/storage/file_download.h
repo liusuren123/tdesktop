@@ -98,6 +98,24 @@ public:
 	[[nodiscard]] virtual Data::FileOrigin fileOrigin() const;
 	[[nodiscard]] float64 currentProgress() const;
 	[[nodiscard]] virtual int64 currentOffset() const;
+	// Per-chunk data extent for the parallel downloader. Default returns 0
+	// because most loaders either buffer in memory or write to a single
+	// contiguous file. mtpFileLoader overrides this with its own
+	// next-request offset so the parallel controller can report a per-chunk
+	// ready value that is independent of the global shared temp file size.
+	[[nodiscard]] virtual int64 readyForParallelChunk() const {
+		return 0;
+	}
+	// True if checkForOpen() should open the target file in Append mode
+	// rather than truncating. mtpFileLoader returns true because the
+	// parallel downloader shares a single temp file across N chunk
+	// loaders and each loader must preserve bytes written by its
+	// siblings. All other loaders write to their own final file and
+	// keep the old Truncate-on-open behavior (Qt 6's WriteOnly already
+	// implies Truncate).
+	[[nodiscard]] virtual bool appendOnOpen() const {
+		return false;
+	}
 	[[nodiscard]] int64 fullSize() const {
 		return _fullSize;
 	}
