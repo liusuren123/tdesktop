@@ -57,6 +57,7 @@ public:
 private:
 	class ToggleAccountsButton;
 	class ResetScaleButton;
+	class DownloadsButton;
 
 	bool eventHook(QEvent *event) override;
 	void paintEvent(QPaintEvent *e) override;

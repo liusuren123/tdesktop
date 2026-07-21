@@ -28,6 +28,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/info_memento.h"
 #include "info/profile/info_profile_badge.h"
 #include "settings/settings_common.h"
+#include "ui/widgets/downloads/downloads_sample.h"
 #include "info/profile/info_profile_emoji_status_panel.h"
 #include "info/profile/info_profile_icon.h"
 #include "info/stories/info_stories_widget.h"
@@ -156,6 +157,24 @@ protected:
 	void paintEvent(QPaintEvent *e) override;
 
 	static constexpr auto kText = "100%";
+
+};
+
+class MainMenu::DownloadsButton final : public Ui::SettingsButton {
+public:
+	DownloadsButton(
+		QWidget *parent,
+		rpl::producer<QString> &&text,
+		const style::SettingsButton &st = st::defaultSettingsButton);
+
+	void setBadge(QString text);
+	[[nodiscard]] bool hasBadge() const { return !_badge.isEmpty(); }
+
+protected:
+	void paintEvent(QPaintEvent *e) override;
+
+private:
+	QString _badge;
 
 };
 
@@ -302,6 +321,33 @@ void MainMenu::ResetScaleButton::paintEvent(QPaintEvent *e) {
 		left + st::mainMenuResetScaleLeft,
 		top + st::mainMenuResetScaleTop + st::mainMenuResetScaleFont->ascent,
 		kText);
+}
+
+MainMenu::DownloadsButton::DownloadsButton(
+		QWidget *parent,
+		rpl::producer<QString> &&text,
+		const style::SettingsButton &st)
+: Ui::SettingsButton(parent, std::move(text), st) {
+}
+
+void MainMenu::DownloadsButton::setBadge(QString text) {
+	if (_badge == text) {
+		return;
+	}
+	_badge = std::move(text);
+	update();
+}
+
+void MainMenu::DownloadsButton::paintEvent(QPaintEvent *e) {
+	Ui::SettingsButton::paintEvent(e);
+	if (_badge.isEmpty()) {
+		return;
+	}
+	auto p = Painter(this);
+	const auto style = Settings::Badge::Style();
+	const auto right = width() - st::mainMenuToggleSize * 2;
+	const auto top = (height() - st::mainMenuBadgeSize) / 2;
+	Ui::PaintUnreadBadge(p, _badge, right, top, style);
 }
 
 MainMenu::MainMenu(
@@ -708,10 +754,18 @@ void MainMenu::setupMenu() {
 		)->setClickedCallback([=] {
 			::Calls::ShowCallsBox(controller);
 		});
-		addAction(
+
+		const auto downloadsButton = _menu->add(object_ptr<DownloadsButton>(
+			_menu,
 			tr::lng_menu_downloads(),
-			{ &st::menuIconDownloads }
-		)->setClickedCallback([=] {
+			st::mainMenuButton));
+		Settings::AddButtonIcon(
+			downloadsButton,
+			st::mainMenuButton,
+			{ &st::menuIconDownloads });
+		downloadsButton->setBadge(QString::number(
+			Sample::ActiveCount(Sample::InitialRows())));
+		downloadsButton->setClickedCallback([=] {
 			controller->showDownloads();
 		});
 		addAction(
