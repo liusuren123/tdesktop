@@ -1,0 +1,78 @@
+/*
+This file is part of Telegram Desktop,
+the official desktop application for the Telegram messaging service.
+
+For license and copyright information please follow this link:
+https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+*/
+using "ui/colors.palette";
+using "ui/widgets/widgets.style";
+
+menuIconDownloads: icon {{ "menu/download", menuIconColor }};
+
+downloadsRowHeight: 70px;
+downloadsRowOuterPadding: 12px;
+downloadsRowHorizontalPadding: 16px;
+downloadsRowBorderWidth: 1px;
+downloadsRowBorderFg: windowBg;
+downloadsHeaderHeight: 56px;
+downloadsHeaderPadding: 20px;
+downloadsTabBarHeight: 44px;
+downloadsTabBarPadding: 16px;
+downloadsTabGap: 4px;
+downloadsThumbnailSize: 44px;
+downloadsThumbnailRadius: 8px;
+downloadsBadgeHeight: 19px;
+downloadsBadgePadding: 6px;
+downloadsProgressHeight: 3px;
+downloadsFooterHeight: 36px;
+downloadsFooterPadding: 20px;
+downloadsFooterDotSize: 8px;
+downloadsSearchWidth: 240px;
+downloadsSearchHeight: 33px;
+downloadsSortButtonHeight: 30px;
+downloadsViewToggleWidth: 64px;
+downloadsViewToggleHeight: 32px;
+downloadsSizeColumnWidth: 70px;
+downloadsDateColumnWidth: 96px;
+
+downloadsBadgeFont: font(11px semibold);
+downloadsFileIconFont: font(9px semibold);
+
+downloadsHeaderTitle: FlatLabel(defaultFlatLabel) {
+	style: semiboldTextStyle;
+	textFg: windowFg;
+}
+downloadsHeaderSubtitle: FlatLabel(defaultFlatLabel) {
+	style: defaultTextStyle;
+	textFg: windowSubTextFg;
+}
+downloadsEmptyTitle: FlatLabel(defaultFlatLabel) {
+	style: semiboldTextStyle;
+	textFg: windowFg;
+}
+downloadsEmptySubtitle: FlatLabel(defaultFlatLabel) {
+	style: defaultTextStyle;
+	textFg: windowSubTextFg;
+}
+downloadsFooterCount: FlatLabel(defaultFlatLabel) {
+	style: defaultTextStyle;
+	textFg: windowSubTextFg;
+}
+
+downloadsRowName: FlatLabel(defaultFlatLabel) {
+	style: semiboldTextStyle;
+	textFg: windowFg;
+}
+downloadsRowSource: FlatLabel(defaultFlatLabel) {
+	style: defaultTextStyle;
+	textFg: windowSubTextFg;
+}
+downloadsRowSize: FlatLabel(defaultFlatLabel) {
+	style: defaultTextStyle;
+	textFg: windowSubTextFg;
+}
+downloadsRowDate: FlatLabel(defaultFlatLabel) {
+	style: defaultTextStyle;
+	textFg: windowSubTextFg;
+}

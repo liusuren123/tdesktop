@@ -1940,6 +1940,16 @@ PRIVATE
     ui/widgets/expandable_peer_list.h
     ui/widgets/chat_filters_tabs_strip.cpp
     ui/widgets/chat_filters_tabs_strip.h
+    ui/widgets/downloads/downloads_content.cpp
+    ui/widgets/downloads/downloads_content.h
+    ui/widgets/downloads/downloads_file_icon.cpp
+    ui/widgets/downloads/downloads_file_icon.h
+    ui/widgets/downloads/downloads_row.cpp
+    ui/widgets/downloads/downloads_row.h
+    ui/widgets/downloads/downloads_sample.cpp
+    ui/widgets/downloads/downloads_sample.h
+    ui/widgets/downloads/downloads_status_badge.cpp
+    ui/widgets/downloads/downloads_status_badge.h
     ui/widgets/peer_bubble.cpp
     ui/widgets/peer_bubble.h
     ui/countryinput.cpp

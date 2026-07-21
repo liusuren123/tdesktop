@@ -43,6 +43,7 @@ set(style_files
     window/window.style
     editor/editor.style
     statistics/statistics.style
+    ui/downloads_icons.style
 )
 
 set(dependent_style_files

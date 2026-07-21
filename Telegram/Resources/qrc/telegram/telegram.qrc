@@ -47,6 +47,13 @@
     <file alias="dice/dice4.svg">../../art/dice/dice4.svg</file>
     <file alias="dice/dice5.svg">../../art/dice/dice5.svg</file>
     <file alias="dice/dice6.svg">../../art/dice/dice6.svg</file>
+    <file alias="downloads/download-small.svg">../../icons/downloads/download-small.svg</file>
+    <file alias="downloads/document.svg">../../icons/downloads/document.svg</file>
+    <file alias="downloads/clock.svg">../../icons/downloads/clock.svg</file>
+    <file alias="downloads/warning.svg">../../icons/downloads/warning.svg</file>
+    <file alias="downloads/check.svg">../../icons/downloads/check.svg</file>
+    <file alias="downloads/chevron-down.svg">../../icons/downloads/chevron-down.svg</file>
+    <file alias="downloads/search.svg">../../icons/downloads/search.svg</file>
   </qresource>
   <qresource prefix="/icons">
     <file alias="calls/hands.lottie">../../icons/calls/hands.lottie</file>
