@@ -135,7 +135,7 @@ void DownloadsContent::setupList() {
 	_scroll = Ui::CreateChild<Ui::ScrollArea>(this);
 	_scroll->setWidgetResizable(true);
 	_listHost = Ui::CreateChild<QWidget>(_scroll->widget());
-	_scroll->widget()->layout()->addWidget(_listHost);
+	_listHost->setMinimumHeight(1);
 
 	_emptyTitle = Ui::CreateChild<FlatLabel>(_listHost, st::downloadsEmptyTitle);
 	_emptyTitle->setText(tr::lng_downloads_empty_no_tasks(tr::now));
@@ -364,6 +364,11 @@ void DownloadsContent::resizeEvent(QResizeEvent *e) {
 		const auto y = int(i)
 			* (st::downloadsRowHeight + st::downloadsRowOuterPadding * 2);
 		_rowWidgets[i]->setGeometry(0, y, w, st::downloadsRowHeight + st::downloadsRowOuterPadding * 2);
+	}
+	const auto totalListHeight = int(_rowWidgets.size())
+		* (st::downloadsRowHeight + st::downloadsRowOuterPadding * 2);
+	if (_listHost) {
+		_listHost->setGeometry(0, 0, w, std::max(totalListHeight, 1));
 	}
 	if (_visible.empty()) {
 		_emptyTitle->move(
