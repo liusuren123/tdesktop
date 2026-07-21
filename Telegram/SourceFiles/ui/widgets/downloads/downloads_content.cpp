@@ -134,7 +134,8 @@ void DownloadsContent::setupFooter() {
 void DownloadsContent::setupList() {
 	_scroll = Ui::CreateChild<Ui::ScrollArea>(this);
 	_scroll->setWidgetResizable(true);
-	_listHost = Ui::CreateChild<QWidget>(_scroll->widget());
+	_listHost = Ui::CreateChild<QWidget>(_scroll);
+	_scroll->setWidget(_listHost);
 	_listHost->setMinimumHeight(1);
 
 	_emptyTitle = Ui::CreateChild<FlatLabel>(_listHost, st::downloadsEmptyTitle);
