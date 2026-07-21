@@ -1,6 +1,7 @@
 /out/
 Debug/
 Release/
+figma.token
 /ThirdParty/
 /Telegram/build/target
 /Telegram/tests/
