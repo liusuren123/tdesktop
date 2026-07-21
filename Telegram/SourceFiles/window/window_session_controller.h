@@ -301,6 +301,8 @@ public:
 		const SectionShow &params = SectionShow());
 	void showSettings(const SectionShow &params = SectionShow());
 
+	void showDownloads(const SectionShow &params = SectionShow());
+
 	void showPollResults(
 		not_null<PollData*> poll,
 		FullMsgId contextId,

@@ -1948,6 +1948,8 @@ PRIVATE
     ui/widgets/downloads/downloads_row.h
     ui/widgets/downloads/downloads_sample.cpp
     ui/widgets/downloads/downloads_sample.h
+    ui/widgets/downloads/downloads_section.cpp
+    ui/widgets/downloads/downloads_section.h
     ui/widgets/downloads/downloads_status_badge.cpp
     ui/widgets/downloads/downloads_status_badge.h
     ui/widgets/peer_bubble.cpp

@@ -84,6 +84,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/format_values.h" // Ui::FormatPhone.
 #include "ui/delayed_activation.h"
 #include "ui/boxes/boost_box.h"
+#include "ui/widgets/downloads/downloads_section.h"
 #include "ui/chat/chat_style.h"
 #include "ui/chat/chat_theme.h"
 #include "ui/effects/message_sending_animation_controller.h"
@@ -1479,6 +1480,10 @@ void SessionNavigation::showSettings(
 
 void SessionNavigation::showSettings(const SectionShow &params) {
 	showSettings(Settings::MainId(), params);
+}
+
+void SessionNavigation::showDownloads(const SectionShow &params) {
+	showSection(Ui::MakeDownloadsMemento(), params);
 }
 
 void SessionNavigation::showPollResults(
