@@ -67,6 +67,7 @@ void DownloadsContent::setupHeader() {
 
 	_sortButton = Ui::CreateChild<QPushButton>(this);
 	_sortButton->setFixedHeight(st::downloadsSortButtonHeight);
+	_sortButton->setText(tr::lng_downloads_sort_date(tr::now));
 	connect(_sortButton, &QPushButton::clicked, this, [this] {
 		cycleSortKey();
 	});
@@ -79,6 +80,8 @@ void DownloadsContent::setupHeader() {
 	_viewToggleB->setFixedSize(
 		st::downloadsViewToggleWidth / 2,
 		st::downloadsViewToggleHeight);
+	_viewToggleA->setText(u"≡"_q);
+	_viewToggleB->setText(u"☰"_q);
 }
 
 void DownloadsContent::setupTabs() {
@@ -337,7 +340,7 @@ void DownloadsContent::resizeEvent(QResizeEvent *e) {
 	auto tabX = tabPad;
 	for (size_t i = 0; i < _tabButtons.size(); ++i) {
 		_tabButtons[i]->adjustSize();
-		const auto btnWidth = _tabButtons[i]->sizeHint().width() + 16;
+		const auto btnWidth = _tabButtons[i]->sizeHint().width() + 12;
 		_tabButtons[i]->setFixedWidth(btnWidth);
 		_tabButtons[i]->setFixedHeight(st::downloadsTabBarHeight);
 		_tabButtons[i]->move(tabX, tabY);
@@ -354,11 +357,18 @@ void DownloadsContent::resizeEvent(QResizeEvent *e) {
 		_footerDot->x() + st::downloadsFooterDotSize + 8,
 		footerY);
 
-	_cancelAll->adjustSize();
-	_pauseAll->adjustSize();
-	_cancelAll->move(w - pad - _cancelAll->sizeHint().width(), footerY + 4);
+	_cancelAll->setFixedHeight(st::downloadsFooterHeight - 8);
+	_pauseAll->setFixedHeight(st::downloadsFooterHeight - 8);
+	const auto cancelText = tr::lng_downloads_action_cancel_all(tr::now);
+	const auto pauseText = tr::lng_downloads_action_pause_all(tr::now);
+	const auto fm = QFontMetrics(_cancelAll->font());
+	const auto cancelWidth = fm.horizontalAdvance(cancelText) + 24;
+	const auto pauseWidth = fm.horizontalAdvance(pauseText) + 24;
+	_cancelAll->setFixedWidth(cancelWidth);
+	_pauseAll->setFixedWidth(pauseWidth);
+	_cancelAll->move(w - pad - cancelWidth, footerY + 4);
 	_pauseAll->move(
-		_cancelAll->x() - _pauseAll->sizeHint().width() - 16,
+		_cancelAll->x() - pauseWidth - 8,
 		footerY + 4);
 
 	for (size_t i = 0; i < _rowWidgets.size(); ++i) {

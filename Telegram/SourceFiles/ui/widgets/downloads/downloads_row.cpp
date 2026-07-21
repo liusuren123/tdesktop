@@ -155,8 +155,29 @@ void DownloadsRow::resizeEvent(QResizeEvent *e) {
 		st::downloadsThumbnailSize,
 		st::downloadsThumbnailSize);
 
+	const auto sizeX = width() - st::downloadsRowHorizontalPadding - st::downloadsDateColumnWidth - st::downloadsSizeColumnWidth;
+	const auto dateX = width() - st::downloadsRowHorizontalPadding - st::downloadsDateColumnWidth;
 	const auto nameX = st::downloadsRowHorizontalPadding + st::downloadsThumbnailSize + st::downloadsTabGap;
-	const auto badgeX = width() - st::downloadsRowHorizontalPadding - st::downloadsSizeColumnWidth - st::downloadsDateColumnWidth;
+
+	const auto badgeText = [&]() -> QString {
+		switch (_row.state) {
+		case Sample::State::Downloading: return QString::number(_row.percent) + u"%"_q;
+		case Sample::State::Paused: return tr::lng_downloads_status_paused(tr::now);
+		case Sample::State::Failed: return tr::lng_downloads_status_failed(tr::now);
+		case Sample::State::Completed:
+		default: return tr::lng_downloads_status_done(tr::now);
+		}
+	}();
+	const auto badgeMetrics = QFontMetrics(st::downloadsBadgeFont->f);
+	const auto badgeWidth = badgeMetrics.horizontalAdvance(badgeText)
+		+ st::downloadsBadgePadding * 2;
+	const auto badgeHeight = st::downloadsBadgeHeight;
+	const auto badgeRight = sizeX - st::downloadsTabGap;
+	const auto badgeX = std::max(int(nameX + 1), badgeRight - badgeWidth);
+
+	_badge->setGeometry(badgeX, y + 2, badgeWidth, badgeHeight);
+	_badge->raise();
+
 	const auto nameWidth = std::max(0, badgeX - nameX - st::downloadsTabGap);
 
 	_nameWrap->setGeometry(nameX, y, nameWidth, st::downloadsRowHeight);
@@ -165,13 +186,9 @@ void DownloadsRow::resizeEvent(QResizeEvent *e) {
 	_source->resizeToWidth(nameWidth);
 	_source->moveToLeft(0, _name->height() + 2);
 
-	_badge->move(badgeX, y + (st::downloadsRowHeight - _badge->height()) / 2);
-
-	const auto sizeX = width() - st::downloadsRowHorizontalPadding - st::downloadsDateColumnWidth - st::downloadsSizeColumnWidth;
 	_size->resizeToWidth(st::downloadsSizeColumnWidth);
 	_size->move(sizeX, y + (st::downloadsRowHeight - _size->height()) / 2);
 
-	const auto dateX = width() - st::downloadsRowHorizontalPadding - st::downloadsDateColumnWidth;
 	_date->resizeToWidth(st::downloadsDateColumnWidth);
 	_date->move(dateX, y + (st::downloadsRowHeight - _date->height()) / 2);
 }
