@@ -41,6 +41,7 @@ DownloadsContent::DownloadsContent(QWidget *parent)
 
 	setupHeader();
 	setupTabs();
+	setupColumnHeaders();
 	setupFooter();
 	setupList();
 
@@ -85,10 +86,18 @@ void DownloadsContent::setupHeader() {
 }
 
 void DownloadsContent::setupTabs() {
+	const auto tabStyle = QStringLiteral(
+		"QPushButton { background: transparent; color: %1; border: none; padding: 0 6px; border-radius: 14px; }"
+		" QPushButton:hover { background: rgba(255,255,255,0.06); }"
+		" QPushButton:checked { background: rgba(42,171,238,0.18); color: #2AABEE; }"
+	).arg(QStringLiteral("#aaaaaa"));
+
 	for (size_t i = 0; i < _tabs.size(); ++i) {
 		auto button = Ui::CreateChild<QPushButton>(this);
 		button->setCheckable(true);
 		button->setAutoExclusive(true);
+		button->setCursor(Qt::PointingHandCursor);
+		button->setStyleSheet(tabStyle);
 		const auto index = int(i);
 		connect(button, &QPushButton::clicked, this, [this, index] {
 			_activeTab = index;
@@ -103,13 +112,13 @@ void DownloadsContent::setupTabs() {
 
 	auto labelFor = [&](int i) -> QString {
 		switch (i) {
-		case 0: return tr::lng_downloads_tab_all(tr::now);
-		case 1: return tr::lng_downloads_tab_photos(tr::now);
-		case 2: return tr::lng_downloads_tab_videos(tr::now);
-		case 3: return tr::lng_downloads_tab_files(tr::now);
-		case 4: return tr::lng_downloads_tab_music(tr::now);
-		case 5: return tr::lng_downloads_tab_links(tr::now);
-		case 6: return tr::lng_downloads_tab_voice(tr::now);
+		case 0: return QString::fromUtf8("\xE2\xAC\x87 ") + tr::lng_downloads_tab_all(tr::now);
+		case 1: return QString::fromUtf8("\xF0\x9F\x93\xB7 ") + tr::lng_downloads_tab_photos(tr::now);
+		case 2: return QString::fromUtf8("\xF0\x9F\x8E\xAC ") + tr::lng_downloads_tab_videos(tr::now);
+		case 3: return QString::fromUtf8("\xF0\x9F\x93\x84 ") + tr::lng_downloads_tab_files(tr::now);
+		case 4: return QString::fromUtf8("\xF0\x9F\x8E\xB5 ") + tr::lng_downloads_tab_music(tr::now);
+		case 5: return QString::fromUtf8("\xF0\x9F\x93\x8E ") + tr::lng_downloads_tab_links(tr::now);
+		case 6: return QString::fromUtf8("\xF0\x9F\x8E\xA4 ") + tr::lng_downloads_tab_voice(tr::now);
 		}
 		return QString();
 	};
@@ -119,9 +128,29 @@ void DownloadsContent::setupTabs() {
 	}
 }
 
+void DownloadsContent::setupColumnHeaders() {
+	_colName = Ui::CreateChild<FlatLabel>(this, st::downloadsColumnHeader);
+	_colName->setText(tr::lng_downloads_col_name(tr::now));
+
+	_colProgress = Ui::CreateChild<FlatLabel>(this, st::downloadsColumnHeader);
+	_colProgress->setText(tr::lng_downloads_col_progress(tr::now));
+
+	_colSize = Ui::CreateChild<FlatLabel>(this, st::downloadsColumnHeader);
+	_colSize->setText(tr::lng_downloads_col_size(tr::now));
+
+	_colDate = Ui::CreateChild<FlatLabel>(this, st::downloadsColumnHeader);
+	_colDate->setText(tr::lng_downloads_col_date(tr::now));
+
+	_colActions = Ui::CreateChild<FlatLabel>(this, st::downloadsColumnHeader);
+	_colActions->setText(tr::lng_downloads_col_actions(tr::now));
+}
+
 void DownloadsContent::setupFooter() {
 	_footerDot = Ui::CreateChild<QLabel>(this);
 	_footerDot->setFixedSize(st::downloadsFooterDotSize, st::downloadsFooterDotSize);
+	_footerDot->setStyleSheet(QString(
+		"background: #2AABEE; border-radius: %1px;"
+	).arg(st::downloadsFooterDotSize / 2));
 
 	_footerCount = Ui::CreateChild<FlatLabel>(this, st::downloadsFooterCount);
 
@@ -347,9 +376,28 @@ void DownloadsContent::resizeEvent(QResizeEvent *e) {
 		tabX += btnWidth + st::downloadsTabGap;
 	}
 
-	const auto listY = tabY + st::downloadsTabBarHeight;
+	const auto listY = tabY + st::downloadsTabBarHeight + st::downloadsColumnHeaderHeight;
 	const auto listH = height() - listY - st::downloadsFooterHeight;
 	_scroll->setGeometry(0, listY, w, listH);
+
+	if (_colName) {
+		const auto colHeaderY = tabY + st::downloadsTabBarHeight;
+		const auto padL = st::downloadsRowHorizontalPadding;
+		const auto nameX = padL + st::downloadsThumbnailSize + st::downloadsTabGap;
+		const auto actionsX = w - padL - st::downloadsActionsColumnWidth;
+		const auto sizeX = actionsX - st::downloadsSizeColumnWidth;
+		const auto dateX = actionsX - st::downloadsSizeColumnWidth - st::downloadsDateColumnWidth;
+		const auto progressW = std::max(0, sizeX - nameX - 100);
+		_colName->move(nameX, colHeaderY);
+		_colProgress->move(nameX + 80, colHeaderY);
+		_colSize->move(sizeX, colHeaderY);
+		_colDate->move(dateX, colHeaderY);
+		_colActions->move(actionsX, colHeaderY);
+		_colSize->resizeToWidth(st::downloadsSizeColumnWidth);
+		_colDate->resizeToWidth(st::downloadsDateColumnWidth);
+		_colActions->resizeToWidth(st::downloadsActionsColumnWidth);
+		_colProgress->resizeToWidth(progressW);
+	}
 
 	const auto footerY = height() - st::downloadsFooterHeight;
 	_footerDot->move(pad, footerY + (st::downloadsFooterHeight - st::downloadsFooterDotSize) / 2);

@@ -21,6 +21,12 @@ namespace Ui {
 
 class FlatLabel;
 
+} // namespace Ui
+
+class QPushButton;
+
+namespace Ui {
+
 class DownloadsRow : public RpWidget {
 public:
 	DownloadsRow(QWidget *parent);
@@ -47,8 +53,12 @@ private:
 	FlatLabel *_name = nullptr;
 	FlatLabel *_source = nullptr;
 	DownloadsStatusBadge *_badge = nullptr;
+	FlatLabel *_statusText = nullptr;
 	FlatLabel *_size = nullptr;
 	FlatLabel *_date = nullptr;
+	QPushButton *_actionSave = nullptr;
+	QPushButton *_actionOpenFolder = nullptr;
+	QPushButton *_actionRemove = nullptr;
 
 };
 

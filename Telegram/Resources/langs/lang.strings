@@ -43,6 +43,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_downloads_menu_remove" = "Remove";
 "lng_downloads_empty_no_tasks" = "No downloads yet";
 "lng_downloads_empty_no_tasks_desc" = "Files you download will appear here";
+"lng_downloads_col_name" = "NAME";
+"lng_downloads_col_progress" = "PROGRESS";
+"lng_downloads_col_size" = "SIZE";
+"lng_downloads_col_date" = "DATE";
+"lng_downloads_col_actions" = "ACTIONS";
 "lng_menu_about" = "About";
 "lng_menu_update" = "Update";
 "lng_menu_night_mode" = "Night Mode";

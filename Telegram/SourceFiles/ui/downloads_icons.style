@@ -35,6 +35,9 @@ downloadsViewToggleWidth: 64px;
 downloadsViewToggleHeight: 32px;
 downloadsSizeColumnWidth: 70px;
 downloadsDateColumnWidth: 96px;
+downloadsActionsColumnWidth: 96px;
+downloadsColumnHeaderHeight: 28px;
+downloadsRowStatusHeight: 16px;
 
 downloadsBadgeFont: font(11px semibold);
 downloadsFileIconFont: font(9px semibold);
@@ -56,6 +59,15 @@ downloadsEmptySubtitle: FlatLabel(defaultFlatLabel) {
 	textFg: windowSubTextFg;
 }
 downloadsFooterCount: FlatLabel(defaultFlatLabel) {
+	style: defaultTextStyle;
+	textFg: windowSubTextFg;
+}
+
+downloadsColumnHeader: FlatLabel(defaultFlatLabel) {
+	style: defaultTextStyle;
+	textFg: windowSubTextFg;
+}
+downloadsRowStatus: FlatLabel(defaultFlatLabel) {
 	style: defaultTextStyle;
 	textFg: windowSubTextFg;
 }

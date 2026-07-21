@@ -60,6 +60,7 @@ private:
 	void rebuildVisible();
 	void setupHeader();
 	void setupTabs();
+	void setupColumnHeaders();
 	void setupFooter();
 	void setupList();
 
@@ -85,6 +86,12 @@ private:
 	QPushButton *_viewToggleA = nullptr;
 	QPushButton *_viewToggleB = nullptr;
 	std::vector<QPushButton*> _tabButtons;
+
+	FlatLabel *_colName = nullptr;
+	FlatLabel *_colProgress = nullptr;
+	FlatLabel *_colSize = nullptr;
+	FlatLabel *_colDate = nullptr;
+	FlatLabel *_colActions = nullptr;
 
 	Ui::ScrollArea *_scroll = nullptr;
 	QWidget *_listHost = nullptr;

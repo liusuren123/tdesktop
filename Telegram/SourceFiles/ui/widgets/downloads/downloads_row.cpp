@@ -15,6 +15,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_downloads_icons.h"
 
+#include <QtWidgets/QPushButton>
+
 #include <QtGui/QContextMenuEvent>
 #include <QtGui/QResizeEvent>
 
@@ -44,8 +46,33 @@ void DownloadsRow::setupLabels() {
 	_source = Ui::CreateChild<FlatLabel>(_nameWrap, st::downloadsRowSource);
 
 	_badge = Ui::CreateChild<DownloadsStatusBadge>(this);
+	_statusText = Ui::CreateChild<FlatLabel>(this, st::downloadsRowStatus);
 	_size = Ui::CreateChild<FlatLabel>(this, st::downloadsRowSize);
 	_date = Ui::CreateChild<FlatLabel>(this, st::downloadsRowDate);
+
+	const auto actionStyle = QStringLiteral(
+		"QPushButton { background: transparent; color: #888; border: none; font-size: 14px; }"
+		" QPushButton:hover { color: #fff; }");
+	_actionSave = Ui::CreateChild<QPushButton>(this);
+	_actionSave->setText(QString::fromUtf8("\xE2\xAC\x87"));
+	_actionSave->setFixedSize(28, 28);
+	_actionSave->setStyleSheet(actionStyle);
+
+	_actionOpenFolder = Ui::CreateChild<QPushButton>(this);
+	_actionOpenFolder->setText(QString::fromUtf8("\xF0\x9F\x93\x81"));
+	_actionOpenFolder->setFixedSize(28, 28);
+	_actionOpenFolder->setStyleSheet(actionStyle);
+
+	_actionRemove = Ui::CreateChild<QPushButton>(this);
+	_actionRemove->setText(QString::fromUtf8("\xF0\x9F\x97\x91"));
+	_actionRemove->setFixedSize(28, 28);
+	_actionRemove->setStyleSheet(actionStyle);
+
+	connect(_actionRemove, &QPushButton::clicked, this, [this] {
+		_row.fileName.clear();
+		_row.percent = 0;
+		applySample();
+	});
 }
 
 void DownloadsRow::setSample(const Sample::Row &row) {
@@ -62,6 +89,25 @@ void DownloadsRow::applySample() {
 	_source->setText(sourceText);
 
 	_badge->setState(_row.state, _row.percent);
+
+	switch (_row.state) {
+	case Sample::State::Downloading:
+		_statusText->setText(QString::number(_row.percent) + u"%"_q);
+		break;
+	case Sample::State::Paused:
+		_statusText->setText(tr::lng_downloads_status_paused(tr::now)
+			+ u" · "_q
+			+ QString::number(_row.percent)
+			+ u"%"_q);
+		break;
+	case Sample::State::Failed:
+		_statusText->setText(tr::lng_downloads_status_failed(tr::now));
+		break;
+	case Sample::State::Completed:
+	default:
+		_statusText->setText(tr::lng_downloads_status_done(tr::now));
+		break;
+	}
 
 	_size->setText(_row.sizeText);
 	_date->setText(_row.dateText);
@@ -148,6 +194,7 @@ void DownloadsRow::resizeEvent(QResizeEvent *e) {
 	RpWidget::resizeEvent(e);
 
 	const auto y = st::downloadsRowOuterPadding;
+	const auto rowH = st::downloadsRowHeight;
 
 	_icon->setGeometry(
 		st::downloadsRowHorizontalPadding,
@@ -155,42 +202,34 @@ void DownloadsRow::resizeEvent(QResizeEvent *e) {
 		st::downloadsThumbnailSize,
 		st::downloadsThumbnailSize);
 
-	const auto sizeX = width() - st::downloadsRowHorizontalPadding - st::downloadsDateColumnWidth - st::downloadsSizeColumnWidth;
-	const auto dateX = width() - st::downloadsRowHorizontalPadding - st::downloadsDateColumnWidth;
+	const auto actionsX = width() - st::downloadsRowHorizontalPadding - st::downloadsActionsColumnWidth;
+	const auto sizeX = actionsX - st::downloadsSizeColumnWidth;
+	const auto dateX = actionsX - st::downloadsSizeColumnWidth - st::downloadsDateColumnWidth;
 	const auto nameX = st::downloadsRowHorizontalPadding + st::downloadsThumbnailSize + st::downloadsTabGap;
 
-	const auto badgeText = [&]() -> QString {
-		switch (_row.state) {
-		case Sample::State::Downloading: return QString::number(_row.percent) + u"%"_q;
-		case Sample::State::Paused: return tr::lng_downloads_status_paused(tr::now);
-		case Sample::State::Failed: return tr::lng_downloads_status_failed(tr::now);
-		case Sample::State::Completed:
-		default: return tr::lng_downloads_status_done(tr::now);
-		}
-	}();
-	const auto badgeMetrics = QFontMetrics(st::downloadsBadgeFont->f);
-	const auto badgeWidth = badgeMetrics.horizontalAdvance(badgeText)
-		+ st::downloadsBadgePadding * 2;
-	const auto badgeHeight = st::downloadsBadgeHeight;
-	const auto badgeRight = sizeX - st::downloadsTabGap;
-	const auto badgeX = std::max(int(nameX + 1), badgeRight - badgeWidth);
+	_statusText->resizeToWidth(st::downloadsSizeColumnWidth);
+	_statusText->move(sizeX, y + rowH - st::downloadsRowStatusHeight);
 
-	_badge->setGeometry(badgeX, y + 2, badgeWidth, badgeHeight);
-	_badge->raise();
+	_badge->move(dateX + st::downloadsDateColumnWidth - st::downloadsBadgeHeight,
+		y + rowH - st::downloadsBadgeHeight - 2);
 
-	const auto nameWidth = std::max(0, badgeX - nameX - st::downloadsTabGap);
-
-	_nameWrap->setGeometry(nameX, y, nameWidth, st::downloadsRowHeight);
-	_name->resizeToWidth(nameWidth);
+	_nameWrap->setGeometry(nameX, y,
+		std::max(0, sizeX - nameX - st::downloadsTabGap), rowH);
+	_name->resizeToWidth(_nameWrap->width());
 	_name->moveToLeft(0, 0);
-	_source->resizeToWidth(nameWidth);
+	_source->resizeToWidth(_nameWrap->width());
 	_source->moveToLeft(0, _name->height() + 2);
 
 	_size->resizeToWidth(st::downloadsSizeColumnWidth);
-	_size->move(sizeX, y + (st::downloadsRowHeight - _size->height()) / 2);
+	_size->move(sizeX, y + (rowH - _size->height()) / 2 - st::downloadsRowStatusHeight - 2);
 
 	_date->resizeToWidth(st::downloadsDateColumnWidth);
-	_date->move(dateX, y + (st::downloadsRowHeight - _date->height()) / 2);
+	_date->move(dateX, y + (rowH - _date->height()) / 2 - st::downloadsRowStatusHeight - 2);
+
+	const auto actionY = y + (rowH - 28) / 2 - st::downloadsRowStatusHeight;
+	_actionRemove->move(actionsX + st::downloadsActionsColumnWidth - 28, actionY);
+	_actionOpenFolder->move(actionsX + st::downloadsActionsColumnWidth - 60, actionY);
+	_actionSave->move(actionsX, actionY);
 }
 
 } // namespace Ui
