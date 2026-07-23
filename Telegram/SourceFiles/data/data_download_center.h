@@ -125,6 +125,12 @@ public:
 	void removeForever(DownloadTaskId id);
 	void openFile(DownloadTaskId id);
 	void showInFolder(DownloadTaskId id);
+	// Refresh the source message/document so thumbnails and metadata are
+	// available without requiring the user to open the corresponding chat.
+	// Internally drives the same MTProto fetch path used by startTask, but
+	// without kicking off the actual download. Safe to call repeatedly;
+	// the backend de-duplicates.
+	void refreshTaskInfo(DownloadTaskId id);
 	// Returns the oldest task currently in `Waiting` (or std::nullopt
 	// if the queue is empty). Used by promoteWaiting() and exposed
 	// for tests.

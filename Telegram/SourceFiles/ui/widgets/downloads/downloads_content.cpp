@@ -87,7 +87,20 @@ DownloadsContent::DownloadsContent(
 
 	// Coalesce high-frequency backend updates (e.g. progress ticks) into a
 	// single ~100 ms refresh so repaints stay bounded.
-	_refreshTimer = std::make_unique<base::Timer>([=] { refreshFromBackend(); });
+	_refreshTimer = std::make_unique<base::Timer>([this] {
+		// Coalesce high-frequency backend updates into ~one refresh per
+		// kRefreshTimeoutMs window. The pending flag is set by every backend
+		// event while the timer is active; once it fires we re-arm iff more
+		// events came in during the window — so no event is ever dropped,
+		// yet the timer isn't reset into oblivion by rapid taskUpdated
+		// ticks that arrive faster than the timeout.
+		_refreshPending = false;
+		refreshFromBackend();
+		if (_refreshPending && _refreshTimer
+			&& !_refreshTimer->isActive()) {
+			_refreshTimer->callOnce(kRefreshTimeoutMs);
+		}
+	});
 	const auto arm = [=] { scheduleRefresh(); };
 	_dc->taskAdded() | rpl::on_next(arm, _lifetime);
 	_dc->taskUpdated() | rpl::on_next(arm, _lifetime);
@@ -586,16 +599,33 @@ void DownloadsContent::setupFooter(QVBoxLayout *root) {
 }
 
 void DownloadsContent::scheduleRefresh() {
-	if (_refreshTimer) {
-		_refreshTimer->callOnce(kRefreshTimeoutMs);
-	}
+	// Mark that a refresh is wanted; only arm the timer if it isn't already
+	// running. The timer's callback re-arms itself iff more events came in
+	// while it was running, so events arrive at >= kRefreshTimeoutMs cadence
+	// and none is dropped.
+	_refreshPending = true;
+	if (!_refreshTimer || _refreshTimer->isActive()) return;
+	_refreshTimer->callOnce(kRefreshTimeoutMs);
 }
 
 Sample::Row DownloadsContent::buildUiTask(const Data::DownloadTask &t) {
 	auto r = Sample::Row();
 	r.taskId = t.id;
 	r.fileName = t.fileName;
-	r.sizeText = FormatSizeText(t.totalSize);
+	// Size column: for in-progress tasks show "<downloaded> / <total>" so the
+	// user can see bytes received in real time; for terminal states (completed,
+	// failed, cancelled) collapse to the total. Updated on every coalesced
+	// refresh (≈100ms) via taskUpdated.
+	{
+		const auto total = FormatSizeText(t.totalSize);
+		const auto showReady = (t.state == Data::DownloadState::Downloading
+				|| t.state == Data::DownloadState::Queued
+				|| t.state == Data::DownloadState::Waiting
+				|| t.state == Data::DownloadState::Paused) && t.readySize > 0;
+		r.sizeText = showReady
+			? u"%1 / %2"_q.arg(FormatSizeText(t.readySize)).arg(total)
+			: total;
+	}
 	r.percent = (t.totalSize > 0)
 		? std::clamp(int(t.readySize * 100 / t.totalSize), 0, 100)
 		: 0;
@@ -603,6 +633,16 @@ Sample::Row DownloadsContent::buildUiTask(const Data::DownloadTask &t) {
 	r.dateText = when.isValid()
 		? when.toString(u"MMM d, HH:mm"_q)
 		: QString();
+	// Row caption trailing part ("from Sender · <time>"). Falls back to the
+	// error text when the task is in a Failed state.
+	if (!t.errorMessage.isEmpty()) {
+		r.context = t.errorMessage;
+	} else if (t.addedAt.isValid()) {
+		const auto now = QDateTime::currentDateTime();
+		r.context = (t.addedAt.date() == now.date())
+			? t.addedAt.toString(u"HH:mm"_q)
+			: t.addedAt.toString(u"MMM d"_q);
+	}
 	switch (t.state) {
 	case Data::DownloadState::Queued:
 	case Data::DownloadState::Waiting:
@@ -644,7 +684,6 @@ Sample::Row DownloadsContent::buildUiTask(const Data::DownloadTask &t) {
 	} else {
 		r.kind = Sample::Kind::Document;
 	}
-	r.context = t.errorMessage;
 	// Resolve the originating peer for the "From" row + the row caption.
 	// session->data() may not have the peer loaded yet; fall back to "—".
 	if (t.peerId) {
@@ -654,6 +693,16 @@ Sample::Row DownloadsContent::buildUiTask(const Data::DownloadTask &t) {
 	}
 	if (r.chatName.isEmpty()) {
 		r.chatName = u"—"_q;
+	}
+	// Row caption trailing part ("from Sender · <time>"). Falls back to the
+	// error text when the task is in a Failed state.
+	if (!t.errorMessage.isEmpty()) {
+		r.context = t.errorMessage;
+	} else if (t.addedAt.isValid()) {
+		const auto now = QDateTime::currentDateTime();
+		r.context = (t.addedAt.date() == now.date())
+			? t.addedAt.toString(u"HH:mm"_q)
+			: t.addedAt.toString(u"MMM d"_q);
 	}
 	// Resolve a preview thumbnail for media (photos / video posters).
 	if (t.source == Data::DownloadSource::Document && t.documentId) {
@@ -698,7 +747,26 @@ void DownloadsContent::refreshFromBackend() {
 		// Removed/Cancelled live in the trash; hide from the main list.
 		if (task->state == Data::DownloadState::Removed) continue;
 		alive.insert(task->id);
+		// Ask the backend to refresh the source message/document for any
+		// task we haven't seen before — this is what gives us a real
+		// thumbnail even when the originating chat isn't open. The backend
+		// de-duplicates so repeated calls are safe, but we also gate the
+		// call locally to avoid spurious timer ticks from the coalesced
+		// refresh (~100 ms) nagging the same task on every rebuild.
+		if (task->source == Data::DownloadSource::Document
+			&& !_refreshedTaskIds.contains(task->id)) {
+			_refreshedTaskIds.insert(task->id);
+			_dc->refreshTaskInfo(task->id);
+		}
 		rows.push_back(buildUiTask(*task));
+	}
+	// Prune tracking sets for tasks that are no longer present so we
+	// refresh again if a task with the same id reappears later.
+	auto prev = std::move(_refreshedTaskIds);
+	for (const auto id : prev) {
+		if (alive.contains(id)) {
+			_refreshedTaskIds.insert(id);
+		}
 	}
 	// Drop media views for tasks that are no longer present.
 	for (auto it = _documentMedia.begin(); it != _documentMedia.end();) {

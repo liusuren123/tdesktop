@@ -29,6 +29,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QDesktopServices>
 #include <QtCore/QUrl>
 #include <QtCore/QProcess>
+
+#if defined Q_OS_WIN
+#include <windows.h>
+#include <ShlObj.h>
+#endif
 namespace Data {
 namespace {
 constexpr auto kFormatVersion = 1;
@@ -426,27 +431,91 @@ void DownloadCenter::showInFolder(DownloadTaskId id) {
 	if (it == _tasks.end()) {
 		return;
 	}
-	const auto path = it->second.savedAbsolutePath.isEmpty()
-		? it->second.savePath
-		: it->second.savedAbsolutePath;
-	const auto absolute = QFileInfo(path).absoluteFilePath();
-	if (absolute.isEmpty()) {
-		return;
+	const auto &task = it->second;
+	// Prefer the on-disk path for completed downloads; fall back to the
+	// destination the user picked at add-time, which may point at a file
+	// that hasn't materialised yet (still in progress / queued).
+	QString path = task.savedAbsolutePath;
+	if (path.isEmpty()) path = task.savePath;
+
+	QString openDir;
+	bool selectFile = false;
+	if (!path.isEmpty()) {
+		QFileInfo info(path);
+		if (info.exists()) {
+			// File is on disk — point Explorer at it with /select.
+			openDir = info.absolutePath();
+			selectFile = true;
+		} else if (QFile::exists(info.absolutePath())) {
+			// Destination folder exists but the file isn't there yet —
+			// open the folder so the user can see where it will land.
+			openDir = info.absolutePath();
+		} else {
+			// Neither file nor parent directory exist. Falling back to
+			// the absoluteFilePath() of "" returns the process CWD, which
+			// on Windows often resolves to the user's Documents folder —
+			// confusing; ignore it instead.
+		}
 	}
+	if (openDir.isEmpty()) {
+		// No usable per-task path (legacy data, or task came from a flow
+		// that left savePath empty). At least open the Telegram downloads
+		// base directory so something useful shows up.
+		openDir = storagePath();
+	}
+	if (openDir.isEmpty()) return;
+
 #if defined Q_OS_WIN
-	QProcess::startDetached(u"explorer.exe"_q, {
-		QString(),
-		u"/select,"_q + QDir::toNativeSeparators(absolute),
-	});
+	// Bypass the shell command-line entirely — it mangles Unicode paths
+	// (and sometimes spaces) leading Explorer to fall back to Documents.
+	// Use the Win32 Shell API directly via PIDLs, which are UTF-16 native
+	// and immune to shell parsing.
+	const auto native = selectFile
+		? QDir::toNativeSeparators(path)
+		: QDir::toNativeSeparators(openDir);
+	const std::wstring wpath = native.toStdWString();
+	PIDLIST_ABSOLUTE pidlItem = ILCreateFromPathW(wpath.c_str());
+	if (pidlItem) {
+		if (selectFile) {
+			// File pidl → clone and strip last component to get the
+			// parent folder PIDL; pass the file PIDL as the item to
+			// select, so Explorer highlights exactly this file.
+			PIDLIST_ABSOLUTE pidlFolder = ILClone(pidlItem);
+			if (pidlFolder) {
+				ILRemoveLastID(pidlFolder);
+				LPCITEMIDLIST items[] = { pidlItem };
+				SHOpenFolderAndSelectItems(
+					pidlFolder,
+					1,
+					items,
+					0);
+				ILFree(pidlFolder);
+			}
+		} else {
+			// Folder pidl — opening the containing folder of the file
+			// pointed to by selectFile isn't applicable here; openDir
+			// is already a directory.
+			SHOpenFolderAndSelectItems(pidlItem, 0, nullptr, 0);
+		}
+		ILFree(pidlItem);
+	} else {
+		// ILCreateFromPathW failed — usually means the path is malformed
+		// or reaches outside the namespace. Fall through to the parent
+		// folder via QDesktopServices.
+		LOG(("DLC: showInFolder id=%1 ILCreateFromPathW FAILED path=%2")
+			.arg(id).arg(native));
+		if (!selectFile && !openDir.isEmpty()) {
+			QDesktopServices::openUrl(QUrl::fromLocalFile(openDir));
+		}
+	}
 #elif defined Q_OS_MAC
-	QProcess::startDetached(u"/usr/bin/open"_q, {
-		u"-R"_q,
-		absolute,
-	});
+	if (selectFile) {
+		QProcess::startDetached(u"/usr/bin/open"_q, { u"-R"_q, path });
+	} else {
+		QProcess::startDetached(u"/usr/bin/open"_q, { openDir });
+	}
 #else
-	QFileInfo info(absolute);
-	const auto dir = info.isDir() ? absolute : info.absolutePath();
-	QProcess::startDetached(u"xdg-open"_q, { dir });
+	QProcess::startDetached(u"xdg-open"_q, { openDir });
 #endif
 }
 const DownloadTask *DownloadCenter::task(DownloadTaskId id) const {
@@ -559,6 +628,23 @@ void DownloadCenter::speedTimerTick() {
 	}
 	_taskUpdated.fire({});
 	scheduleSave();
+}
+void DownloadCenter::refreshTaskInfo(DownloadTaskId id) {
+	LOG(("DLC: refreshTaskInfo id=%1 enter").arg(id));
+	const auto it = _tasks.find(id);
+	if (it == _tasks.end()) {
+		LOG(("DLC: refreshTaskInfo id=%1 NOT_FOUND").arg(id));
+		return;
+	}
+	refreshTaskFileReference(id, [=](bool ok) {
+		LOG(("DLC: refreshTaskInfo id=%1 done ok=%2").arg(id).arg(ok));
+		// Re-fire so the UI re-resolves the document (now populated) and
+		// picks up the thumbnail on the next refresh window.
+		const auto strong = base::make_weak(this).get();
+		if (strong) {
+			strong->_taskUpdated.fire_copy(id);
+		}
+	});
 }
 void DownloadCenter::startTask(DownloadTaskId id) {
 	LOG(("DLC: startTask id=%1 enter").arg(id));

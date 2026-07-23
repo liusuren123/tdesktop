@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QWidget>
 #include <map>
 #include <memory>
+#include <set>
 #include <vector>
 
 namespace base {
@@ -158,9 +159,18 @@ private:
 	Main::Session *_session = nullptr;
 	Data::DownloadCenter *_dc = nullptr;
 	std::unique_ptr<base::Timer> _refreshTimer;
+	// Set by any backend change to request a refresh; cleared by the
+	// timer callback once refreshFromBackend runs. Prevents a re-arm
+	// storm where high-frequency taskUpdated events (every few ms while
+	// a download is in progress) keep resetting the 100 ms coalescing
+	// timer so it never fires.
+	bool _refreshPending = false;
 	// Keeps DocumentMedia views alive per task so preview thumbnails load and
 	// stay cached across rebuilds. Keyed by DownloadTaskId.
 	std::map<uint64, std::shared_ptr<Data::DocumentMedia>> _documentMedia;
+	// Tasks whose source message/document we've already asked the backend to
+	// refresh — avoids redundant MTProto round-trips across refresh cycles.
+	std::set<uint64> _refreshedTaskIds;
 
 	rpl::lifetime _lifetime;
 

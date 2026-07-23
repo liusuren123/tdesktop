@@ -472,10 +472,16 @@ bool DownloadsRowDelegate::editorEvent(
 			Q_EMIT rowContextMenu(index.row(), me->globalPos());
 			return true;
 		}
-		if (me->button() == Qt::LeftButton
-			&& index.column() == DownloadsTableModel::ActionsColumn) {
-			const auto local = me->pos() - option.rect.topLeft();
-			const auto action = hitAction(local, option.rect);
+		if (me->button() == Qt::LeftButton) {
+			// Action buttons are painted at the right end of the full row
+			// (see paintActionsColumn), regardless of which column triggered
+			// editorEvent. Test against the full row rect so a click on a
+			// button always maps correctly — QTableView's columnAt() can
+			// route a click just inside the actions column back to an
+			// earlier column when the layout is tight / scrolled, in which
+			// case the previous column-gated branch silently dropped it.
+			const auto fullRow = FullRowRect(option);
+			const auto action = hitAction(me->pos(), fullRow);
 			switch (action) {
 			case SaveAction:   Q_EMIT saveClicked(index.row());   return true;
 			case FolderAction: Q_EMIT folderClicked(index.row()); return true;
@@ -483,10 +489,7 @@ bool DownloadsRowDelegate::editorEvent(
 			case NoAction:
 			default: break;
 			}
-		}
-		// A left click that didn't land on an action button selects the row
-		// (opens the detail panel).
-		if (me->button() == Qt::LeftButton) {
+			// Click outside any button → open the detail panel.
 			Q_EMIT rowClicked(index.row());
 			return true;
 		}
