@@ -27,6 +27,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_media_player.h" // mediaPlayerMenuCheck
 #include "ui/widgets/popup_menu.h"
 
+#include <QtGui/QMouseEvent>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
@@ -216,6 +217,9 @@ void DownloadsContent::setupTable(QHBoxLayout *content) {
 		"QTableView::item { background: transparent; }"
 	));
 	_table->viewport()->setAutoFillBackground(false);
+	// Track hover for the animated row wash + keep the empty overlay centred.
+	_table->viewport()->setMouseTracking(true);
+	_table->viewport()->installEventFilter(this);
 
 	_table->verticalHeader()->setVisible(false);
 	_table->verticalHeader()->setDefaultSectionSize(
@@ -516,6 +520,7 @@ void DownloadsContent::selectItem(int index) {
 	}
 	_selectedRow = index;
 	if (_gridView) _gridView->setSelectedIndex(index);
+	if (_delegate) _delegate->setSelectedRow(index);
 	if (_detailPanel) {
 		_detailPanel->setRow(_model->rows()[index]);
 		_detailPanel->setVisible(true);
@@ -525,6 +530,7 @@ void DownloadsContent::selectItem(int index) {
 void DownloadsContent::closeDetailPanel() {
 	_selectedRow = -1;
 	if (_gridView) _gridView->setSelectedIndex(-1);
+	if (_delegate) _delegate->setSelectedRow(-1);
 	if (_detailPanel) _detailPanel->setVisible(false);
 }
 
@@ -581,6 +587,8 @@ void DownloadsContent::rebuildModel() {
 	if (_selectedRow >= int(_model->rows().size())) {
 		closeDetailPanel();
 	}
+	// Row indices shift on filter/sort, so the cached hover is stale.
+	if (_delegate) _delegate->setHoveredRow(-1);
 
 	_subtitle->setText(subtitleLabel());
 	if (_footerBar) {
@@ -735,10 +743,16 @@ void DownloadsContent::paintEvent(QPaintEvent *e) {
 }
 
 bool DownloadsContent::eventFilter(QObject *obj, QEvent *e) {
-	if (_emptyOverlay && obj == _table->viewport()) {
-		// Keep overlay centered on the viewport regardless of resize.
-		if (e->type() == QEvent::Resize) {
+	if (_table && obj == _table->viewport()) {
+		const auto type = e->type();
+		if (type == QEvent::Resize && _emptyOverlay) {
+			// Keep overlay centered on the viewport regardless of resize.
 			_emptyOverlay->setGeometry(_table->viewport()->rect());
+		} else if (_delegate && type == QEvent::MouseMove) {
+			const auto me = static_cast<QMouseEvent*>(e);
+			_delegate->setHoveredRow(_table->rowAt(me->pos().y()));
+		} else if (_delegate && type == QEvent::Leave) {
+			_delegate->setHoveredRow(-1);
 		}
 	}
 	return QWidget::eventFilter(obj, e);

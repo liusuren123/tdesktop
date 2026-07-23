@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
+#include "ui/effects/animations.h"
 #include "ui/widgets/downloads/downloads_sample.h"
 
 #include <QtWidgets/QStyledItemDelegate>
@@ -49,6 +50,11 @@ public:
 	// Map a mouse position (in cell-relative coords) to an action button.
 	static ActionHit hitAction(const QPoint &pos, const QRect &cellRect);
 
+	// Row that currently has the detail panel open — gets an accent highlight.
+	void setSelectedRow(int row) { _selectedRow = row; }
+	// Row under the cursor — drives the animated hover wash. Pass -1 on leave.
+	void setHoveredRow(int row);
+
 Q_SIGNALS:
 	void saveClicked(int row);
 	void folderClicked(int row);
@@ -82,6 +88,14 @@ private:
 		const Sample::Row &row,
 		bool hovered,
 		const QPoint &hoverPos) const;
+
+	void hoverTick();
+
+	int _selectedRow = -1;
+	int _hoveredRow = -1;
+	float _hoverShown = 0.f;
+	Ui::Animations::Simple _hoverAnim;
+	mutable QAbstractItemView *_view = nullptr;
 };
 
 } // namespace Ui

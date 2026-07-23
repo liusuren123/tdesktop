@@ -117,12 +117,35 @@ void DownloadsRowDelegate::paint(
 	opt.text.clear();
 	opt.icon = QIcon();
 
+	// Capture the hosting view once so the hover animation can request repaints.
+	if (!_view) {
+		_view = qobject_cast<QAbstractItemView*>(
+			const_cast<QWidget*>(option.widget));
+	}
+
 	const auto fullRow = FullRowRect(option);
 
 	// Column 0 paints the row-spanning background + bottom separator.
 	if (col == DownloadsTableModel::NameColumn) {
-		auto hq = PainterHighQualityEnabler(*painter);
+		const auto rowIndex = index.row();
+		const auto selected = (rowIndex == _selectedRow);
+		const auto hover = (rowIndex == _hoveredRow) ? _hoverShown : 0.f;
+
 		painter->fillRect(fullRow, DownloadsStyle::bg());
+		if (selected) {
+			// Accent-tinted wash + a left accent bar to mark the open row.
+			auto tint = DownloadsStyle::accent();
+			tint.setAlpha(22);
+			painter->fillRect(fullRow, tint);
+			painter->fillRect(
+				QRect(fullRow.left(), fullRow.top(), 3, fullRow.height()),
+				DownloadsStyle::accent());
+		} else if (hover > 0.f) {
+			// Animated hover wash (fades in/out via _hoverAnim).
+			painter->fillRect(
+				fullRow,
+				QColor(255, 255, 255, int(12.f * hover)));
+		}
 		painter->setPen(QPen(DownloadsStyle::rowBorder(), st::downloadsRowBorderWidth));
 		const auto borderY = fullRow.bottom();
 		painter->drawLine(fullRow.left(), borderY, fullRow.right(), borderY);
@@ -443,6 +466,22 @@ bool DownloadsRowDelegate::editorEvent(
 		}
 	}
 	return false;
+}
+
+void DownloadsRowDelegate::setHoveredRow(int row) {
+	if (_hoveredRow == row) return;
+	_hoveredRow = row;
+	// Enter from outside: _hoverShown starts ~0 → fades in.
+	// Move between rows: stays ~1 → highlight slides instantly.
+	// Leave: animates back down to 0 → fades out.
+	const auto target = (row >= 0) ? 1.f : 0.f;
+	_hoverAnim.start([this] { hoverTick(); }, _hoverShown, target, 150, anim::linear);
+	if (_view) _view->viewport()->update();
+}
+
+void DownloadsRowDelegate::hoverTick() {
+	_hoverShown = _hoverAnim.value(_hoverShown);
+	if (_view) _view->viewport()->update();
 }
 
 } // namespace Ui

@@ -68,10 +68,14 @@ using KindUtil::StatusTextFor;
 DownloadsGridView::DownloadsGridView(QWidget *parent)
 : RpWidget(parent) {
 	setAttribute(Qt::WA_OpaquePaintEvent, false);
+	setMouseTracking(true);
+	setCursor(Qt::PointingHandCursor);
 }
 
 void DownloadsGridView::setRows(std::vector<Sample::Row> rows) {
 	_rows = std::move(rows);
+	// Row indices shift on filter/sort, so the cached hover is stale.
+	setHoveredIndex(-1);
 	reflow();
 }
 
@@ -93,6 +97,34 @@ void DownloadsGridView::mousePressEvent(QMouseEvent *e) {
 			return;
 		}
 	}
+}
+
+void DownloadsGridView::mouseMoveEvent(QMouseEvent *e) {
+	for (auto i = 0; i < int(_cardRects.size()); ++i) {
+		if (_cardRects[i].contains(e->pos())) {
+			setHoveredIndex(i);
+			return;
+		}
+	}
+	setHoveredIndex(-1);
+}
+
+void DownloadsGridView::leaveEventHook(QEvent *e) {
+	setHoveredIndex(-1);
+}
+
+void DownloadsGridView::setHoveredIndex(int index) {
+	if (_hoveredIndex == index) return;
+	_hoveredIndex = index;
+	// Enter from outside: fades 0→1; move between cards: stays ~1; leave: →0.
+	const auto target = (index >= 0) ? 1.f : 0.f;
+	_hoverAnim.start([this] { hoverTick(); }, _hoverValue, target, 130, anim::linear);
+	update();
+}
+
+void DownloadsGridView::hoverTick() {
+	_hoverValue = _hoverAnim.value(_hoverValue);
+	update();
 }
 
 void DownloadsGridView::resizeEvent(QResizeEvent *e) {
@@ -143,21 +175,53 @@ void DownloadsGridView::paintEvent(QPaintEvent *e) {
 	p.setRenderHint(QPainter::Antialiasing);
 	const auto n = std::min(int(_cardRects.size()), int(_rows.size()));
 	for (auto i = 0; i < n; ++i) {
-		paintCard(&p, _cardRects[i], _rows[i], i == _selectedIndex);
+		const auto hover = (i == _hoveredIndex) ? _hoverValue : 0.f;
+		// Soft drop shadow grows as the card lifts.
+		if (hover > 0.f) {
+			paintCardShadow(&p, _cardRects[i], hover);
+		}
+		p.save();
+		// Lift the card up a few px while hovered.
+		p.translate(0, -4.0 * hover);
+		paintCard(&p, _cardRects[i], _rows[i], i == _selectedIndex, hover);
+		p.restore();
 	}
+}
+
+void DownloadsGridView::paintCardShadow(
+		QPainter *p,
+		const QRect &card,
+		float value) const {
+	auto hq = PainterHighQualityEnabler(*p);
+	p->setPen(Qt::NoPen);
+	// Two stacked rounded rects approximate a soft shadow; offset grows
+	// with the lift so the gap reads as elevation.
+	const auto radius = cardRadius();
+	const auto draw = [&](int grow, int dy, int alpha) {
+		auto r = QRectF(card).adjusted(-grow, -grow, grow, grow);
+		r.translate(0, dy + 2);
+		p->setBrush(QColor(0, 0, 0, int(alpha * value)));
+		p->drawRoundedRect(r, radius + grow, radius + grow);
+	};
+	draw(6, 4, 50);
+	draw(2, 2, 70);
 }
 
 void DownloadsGridView::paintCard(
 		QPainter *p,
 		const QRect &card,
 		const Sample::Row &row,
-		bool selected) const {
+		bool selected,
+		float hover) const {
 	auto hq = PainterHighQualityEnabler(*p);
 
-	// Card surface — subtle elevated tone on the page background.
+	// Card surface — subtle elevated tone; brightens on hover, selected stays strongest.
+	const auto surfaceAlpha = selected
+		? (16 + int(8 * hover))
+		: (8 + int(12 * hover));
 	QPainterPath cardPath;
 	cardPath.addRoundedRect(QRectF(card), cardRadius(), cardRadius());
-	p->fillPath(cardPath, QColor(255, 255, 255, selected ? 16 : 8));
+	p->fillPath(cardPath, QColor(255, 255, 255, surfaceAlpha));
 
 	// Selection ring — accent-blue outline on the selected card.
 	if (selected) {

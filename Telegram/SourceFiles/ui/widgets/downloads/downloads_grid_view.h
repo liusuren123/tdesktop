@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "rpl/event_stream.h"
 #include "rpl/producer.h"
+#include "ui/effects/animations.h"
 #include "ui/rp_widget.h"
 #include "ui/widgets/downloads/downloads_sample.h"
 
@@ -48,15 +49,21 @@ protected:
 	void paintEvent(QPaintEvent *e) override;
 	void resizeEvent(QResizeEvent *e) override;
 	void mousePressEvent(QMouseEvent *e) override;
+	void mouseMoveEvent(QMouseEvent *e) override;
+	void leaveEventHook(QEvent *e) override;
 
 private:
 	void reflow();
+	void setHoveredIndex(int index);
+	void hoverTick();
 
+	void paintCardShadow(QPainter *p, const QRect &card, float value) const;
 	void paintCard(
 		QPainter *p,
 		const QRect &card,
 		const Sample::Row &row,
-		bool selected) const;
+		bool selected,
+		float hover) const;
 	void paintThumbnail(
 		QPainter *p,
 		const QRect &thumb,
@@ -69,6 +76,9 @@ private:
 	std::vector<Sample::Row> _rows;
 	std::vector<QRect> _cardRects;
 	int _selectedIndex = -1;
+	int _hoveredIndex = -1;
+	float _hoverValue = 0.f;
+	Ui::Animations::Simple _hoverAnim;
 
 	rpl::event_stream<int> _cardClicked;
 
