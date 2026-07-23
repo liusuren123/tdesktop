@@ -1942,20 +1942,31 @@ PRIVATE
     ui/widgets/chat_filters_tabs_strip.h
     ui/widgets/downloads/downloads_content.cpp
     ui/widgets/downloads/downloads_content.h
-    ui/widgets/downloads/downloads_file_icon.cpp
-    ui/widgets/downloads/downloads_file_icon.h
-    ui/widgets/downloads/downloads_row.cpp
-    ui/widgets/downloads/downloads_row.h
+    ui/widgets/downloads/downloads_footer_bar.cpp
+    ui/widgets/downloads/downloads_footer_bar.h
+    ui/widgets/downloads/downloads_detail_panel.cpp
+    ui/widgets/downloads/downloads_detail_panel.h
+    ui/widgets/downloads/downloads_grid_view.cpp
+    ui/widgets/downloads/downloads_grid_view.h
+    ui/widgets/downloads/downloads_kind.h
+    ui/widgets/downloads/downloads_row_delegate.cpp
+    ui/widgets/downloads/downloads_row_delegate.h
     ui/widgets/downloads/downloads_sample.cpp
     ui/widgets/downloads/downloads_sample.h
     ui/widgets/downloads/downloads_section.cpp
     ui/widgets/downloads/downloads_section.h
-    ui/widgets/downloads/downloads_status_badge.cpp
-    ui/widgets/downloads/downloads_status_badge.h
+    ui/widgets/downloads/downloads_table_model.cpp
+    ui/widgets/downloads/downloads_table_model.h
     ui/widgets/downloads/downloads_tab_button.cpp
     ui/widgets/downloads/downloads_tab_button.h
-    ui/widgets/downloads/downloads_icon_button.cpp
-    ui/widgets/downloads/downloads_icon_button.h
+    ui/widgets/downloads/downloads_search.cpp
+    ui/widgets/downloads/downloads_search.h
+    ui/widgets/downloads/downloads_text_button.cpp
+    ui/widgets/downloads/downloads_text_button.h
+    ui/widgets/downloads/downloads_view_toggle.cpp
+    ui/widgets/downloads/downloads_view_toggle.h
+    ui/widgets/downloads/downloads_view_toggle_group.cpp
+    ui/widgets/downloads/downloads_view_toggle_group.h
     ui/widgets/peer_bubble.cpp
     ui/widgets/peer_bubble.h
     ui/countryinput.cpp

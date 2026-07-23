@@ -1,6 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
-  <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
-  <circle cx="5.5" cy="6.5" r="1.2" fill="currentColor"/>
-  <path d="M2 11 L6 8 L9 10 L14 6 L14 12.5 Q14 13 13.5 13 L2.5 13 Q2 13 2 12.5 Z" fill="currentColor"/>
+<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M11.0833 1.75H2.91667C2.27233 1.75 1.75 2.27233 1.75 2.91667V11.0833C1.75 11.7277 2.27233 12.25 2.91667 12.25H11.0833C11.7277 12.25 12.25 11.7277 12.25 11.0833V2.91667C12.25 2.27233 11.7277 1.75 11.0833 1.75Z" stroke="#FFFFFF" stroke-width="1.16667" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5.24992 6.41665C5.89425 6.41665 6.41659 5.89431 6.41659 5.24998C6.41659 4.60565 5.89425 4.08331 5.24992 4.08331C4.60559 4.08331 4.08325 4.60565 4.08325 5.24998C4.08325 5.89431 4.60559 6.41665 5.24992 6.41665Z" stroke="#FFFFFF" stroke-width="1.16667" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.25 8.75003L10.4498 6.94986C10.2311 6.73114 9.93436 6.60828 9.625 6.60828C9.31564 6.60828 9.01895 6.73114 8.80017 6.94986L3.5 12.25" stroke="#FFFFFF" stroke-width="1.16667" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

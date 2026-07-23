@@ -53,7 +53,7 @@
     <file alias="downloads/clock.svg">../../icons/downloads/clock.svg</file>
     <file alias="downloads/warning.svg">../../icons/downloads/warning.svg</file>
     <file alias="downloads/check.svg">../../icons/downloads/check.svg</file>
-    <file alias="downloads/chevron-down.svg">../../icons/downloads/chevron-down.svg</file>
+    <file alias="downloads/chevron_down.svg">../../icons/downloads/chevron_down.svg</file>
     <file alias="downloads/search.svg">../../icons/downloads/search.svg</file>
     <file alias="downloads/photo.svg">../../icons/downloads/photo.svg</file>
     <file alias="downloads/video.svg">../../icons/downloads/video.svg</file>
@@ -62,6 +62,14 @@
     <file alias="downloads/mic.svg">../../icons/downloads/mic.svg</file>
     <file alias="downloads/folder.svg">../../icons/downloads/folder.svg</file>
     <file alias="downloads/trash.svg">../../icons/downloads/trash.svg</file>
+    <file alias="downloads/forward.svg">../../icons/downloads/forward.svg</file>
+    <file alias="downloads/sort.svg">../../icons/downloads/sort.svg</file>
+    <file alias="downloads/tabel.svg">../../icons/downloads/tabel.svg</file>
+    <file alias="downloads/listview.svg">../../icons/downloads/listview.svg</file>
+    <file alias="downloads/pause.svg">../../icons/downloads/pause.svg</file>
+    <file alias="downloads/cancel.svg">../../icons/downloads/cancel.svg</file>
+    <file alias="downloads/delete.svg">../../icons/downloads/delete.svg</file>
+    <file alias="downloads/openinfolder.svg">../../icons/downloads/openinfolder.svg</file>
   </qresource>
   <qresource prefix="/icons">
     <file alias="calls/hands.lottie">../../icons/calls/hands.lottie</file>

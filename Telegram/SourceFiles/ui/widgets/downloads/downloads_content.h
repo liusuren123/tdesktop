@@ -7,42 +7,56 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
+#include "ui/widgets/downloads/downloads_row_delegate.h"
 #include "ui/widgets/downloads/downloads_sample.h"
-#include "ui/widgets/downloads/downloads_row.h"
-#include "ui/widgets/scroll_area.h"
+#include "rpl/lifetime.h"
 
 #include <QtCore/QString>
-#include <QtWidgets/QLabel>
-#include <QtWidgets/QLineEdit>
-#include <QtWidgets/QPushButton>
+#include <QtWidgets/QHeaderView>
+#include <QtWidgets/QLayout>
+#include <QtWidgets/QScrollArea>
+#include <QtWidgets/QTableView>
 #include <QtWidgets/QWidget>
+#include <memory>
 #include <vector>
 
 namespace Ui {
 
 class FlatLabel;
-class DownloadsRow;
-
+class DownloadsSearch;
+class DownloadsTextButton;
+class DownloadsViewToggleGroup;
+class DownloadsGridView;
+class DownloadsDetailPanel;
 class DownloadsTabButton;
+class DownloadsTableModel;
+class DownloadsFooterBar;
+class PopupMenu;
 
+// MVC-based Downloads page.
+//
+// The whole page is assembled with QLayouts — no hand-rolled coordinate
+// math in resizeEvent. The central table is a QTableView backed by a
+// QAbstractTableModel (DownloadsTableModel) and a QStyledItemDelegate
+// (DownloadsRowDelegate).
 class DownloadsContent : public QWidget {
 public:
 	DownloadsContent(QWidget *parent);
-
-	[[nodiscard]] QSize sizeHint() const override;
+	~DownloadsContent() override;
 
 	void pauseAll();
 	void cancelAll();
 
 protected:
+	bool eventFilter(QObject *obj, QEvent *e) override;
 	void paintEvent(QPaintEvent *e) override;
-	void resizeEvent(QResizeEvent *e) override;
 
 private:
 	enum class SortKey {
 		Date,
-		Size,
 		Name,
+		Size,
+		Sender,
 	};
 
 	struct Tab {
@@ -50,62 +64,76 @@ private:
 		bool (*match)(Sample::Kind) = nullptr;
 	};
 
-	static bool MatchPhoto(Sample::Kind k)   { return k == Sample::Kind::Photo; }
-	static bool MatchVideo(Sample::Kind k)   { return k == Sample::Kind::Video; }
-	static bool MatchFile(Sample::Kind k)    {
-		return k == Sample::Kind::Document || k == Sample::Kind::Archive;
-	}
-	static bool MatchMusic(Sample::Kind k)   { return k == Sample::Kind::Audio; }
-	static bool MatchLink(Sample::Kind k)    { return k == Sample::Kind::Link; }
-	static bool MatchVoice(Sample::Kind k)   { return k == Sample::Kind::Voice; }
+	static bool MatchPhoto(Sample::Kind k);
+	static bool MatchVideo(Sample::Kind k);
+	static bool MatchFile(Sample::Kind k);
+	static bool MatchMusic(Sample::Kind k);
+	static bool MatchLink(Sample::Kind k);
+	static bool MatchVoice(Sample::Kind k);
 
-	void rebuildVisible();
-	void setupHeader();
-	void setupTabs();
-	void setupColumnHeaders();
-	void setupFooter();
-	void setupList();
+	void setupUi();
+	void setupHeader(QVBoxLayout *root);
+	void setupTabs(QVBoxLayout *root);
+	void setupTable(QHBoxLayout *content);
+	void setupGrid(QHBoxLayout *content);
+	void setupFooter(QVBoxLayout *root);
 
+	void setViewMode(int toggleIndex);
+	void selectItem(int index);
+	void closeDetailPanel();
+	void rebuildModel();
 	int countFor(int tabIndex) const;
 	int countTotal() const;
-	QString activeCountLabel() const;
 	QString subtitleLabel() const;
-	void updateSubtitle();
+	QString activeCountLabel() const;
 	void cycleSortKey();
+	void showSortMenu();
+	void setSortKey(SortKey key);
+	[[nodiscard]] QString sortLabel(SortKey key) const;
+	void onRowAction(int row, DownloadsRowDelegate::ActionHit action);
 
+	// Root model data.
 	std::vector<Sample::Row> _rows;
-	std::vector<int> _visible;
 	int _activeTab = 0;
 	SortKey _sortKey = SortKey::Date;
 	QString _search;
 
 	std::vector<Tab> _tabs;
 
+	// Header widgets.
 	FlatLabel *_title = nullptr;
 	FlatLabel *_subtitle = nullptr;
-	QLineEdit *_searchEdit = nullptr;
-	QPushButton *_sortButton = nullptr;
-	QPushButton *_viewToggleA = nullptr;
-	QPushButton *_viewToggleB = nullptr;
+	DownloadsSearch *_searchEdit = nullptr;
+	DownloadsTextButton *_sortButton = nullptr;
+	DownloadsViewToggleGroup *_viewToggle = nullptr;
 	std::vector<DownloadsTabButton*> _tabButtons;
 
-	FlatLabel *_colName = nullptr;
-	FlatLabel *_colProgress = nullptr;
-	FlatLabel *_colSize = nullptr;
-	FlatLabel *_colDate = nullptr;
-	FlatLabel *_colActions = nullptr;
+	// Table.
+	QTableView *_table = nullptr;
+	QHeaderView *_header = nullptr;
+	DownloadsTableModel *_model = nullptr;
+	DownloadsRowDelegate *_delegate = nullptr;
+	QWidget *_emptyOverlay = nullptr;
 
-	Ui::ScrollArea *_scroll = nullptr;
-	QWidget *_listHost = nullptr;
-	std::vector<DownloadsRow*> _rowWidgets;
+	// Content row: holds the list table, the grid scroll area, and the
+	// detail panel. Exactly one of `_table` / `_gridScroll` is visible at a
+	// time (driven by the view toggle); the detail panel is independent so
+	// item selection works in either mode.
+	QWidget *_contentRow = nullptr;
+	QScrollArea *_gridScroll = nullptr;
+	DownloadsGridView *_gridView = nullptr;
+	DownloadsDetailPanel *_detailPanel = nullptr;
+	int _viewMode = 1; // 0 = grid, 1 = list (matches the toggle)
+	int _selectedRow = -1; // index into the filtered model
 
-	QLabel *_footerDot = nullptr;
-	FlatLabel *_footerCount = nullptr;
-	QPushButton *_pauseAll = nullptr;
-	QPushButton *_cancelAll = nullptr;
+	rpl::lifetime _lifetime;
 
-	FlatLabel *_emptyTitle = nullptr;
-	FlatLabel *_emptySubtitle = nullptr;
+	// Footer (hand-painted; no child widgets).
+	DownloadsFooterBar *_footerBar = nullptr;
+
+	// Live sort dropdown — kept alive while shown so the local
+	// unique_ptr in showSortMenu() doesn't tear it down on return.
+	std::unique_ptr<Ui::PopupMenu> _activeSortMenu;
 
 };
 

@@ -7,11 +7,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
-#include <QtGui/QColor>
+#include "styles/palette.h"
 
 namespace DownloadsStyle {
 
-inline constexpr QColor bg()             { return QColor(0x1F, 0x18, 0x18); }
+inline QColor bg()                        { return st::windowBg->c; }
 inline constexpr QColor rowBg()          { return QColor(0, 0, 0, 0); }
 inline constexpr QColor rowBorder()      { return QColor(255, 255, 255, 15); }
 inline constexpr QColor accent()         { return QColor(0x2A, 0xAB, 0xEE); }

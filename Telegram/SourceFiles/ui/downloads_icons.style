@@ -18,8 +18,18 @@ downloadsTabMusic: icon {{ "downloads/music", menuIconColor }};
 downloadsTabLinks: icon {{ "downloads/link", menuIconColor }};
 downloadsTabVoice: icon {{ "downloads/mic", menuIconColor }};
 downloadsActionSave: icon {{ "downloads/download_small", menuIconColor }};
-downloadsActionFolder: icon {{ "downloads/folder", menuIconColor }};
+downloadsActionFolder: icon {{ "downloads/openinfolder", menuIconColor }};
 downloadsActionTrash: icon {{ "downloads/trash", menuIconColor }};
+downloadsSearch: icon {{ "downloads/search", menuIconColor }};
+downloadsSort: icon {{ "downloads/sort", menuIconColor }};
+downloadsChevronDown: icon {{ "downloads/chevron_down", menuIconColor }};
+downloadsViewGrid: icon {{ "downloads/tabel", menuIconColor }};
+downloadsViewList: icon {{ "downloads/listview", menuIconColor }};
+downloadsPause: icon {{ "downloads/pause", menuIconColor }};
+downloadsCancel: icon {{ "downloads/cancel", menuIconColor }};
+downloadsDetailDownload: icon {{ "downloads/download_small", menuIconColor }};
+downloadsDetailForward: icon {{ "downloads/forward", menuIconColor }};
+downloadsDetailRemove: icon {{ "downloads/trash", menuIconColor }};
 
 downloadsRowHeight: 70px;
 downloadsRowOuterPadding: 12px;
@@ -44,11 +54,36 @@ downloadsSearchHeight: 33px;
 downloadsSortButtonHeight: 30px;
 downloadsViewToggleWidth: 64px;
 downloadsViewToggleHeight: 32px;
-downloadsSizeColumnWidth: 70px;
+downloadsSizeColumnWidth: 100px;
 downloadsDateColumnWidth: 96px;
 downloadsActionsColumnWidth: 96px;
+downloadsProgressColumnWidth: 88px;
+downloadsProgressGap: 50px;
 downloadsColumnHeaderHeight: 28px;
 downloadsRowStatusHeight: 16px;
+
+// Grid (card) view layout — see DownloadsGridView.
+downloadsCardGap: 12px;
+downloadsCardHeight: 210px;
+downloadsCardThumbnailHeight: 130px;
+downloadsCardRadius: 12px;
+downloadsCardMinWidth: 180px;
+downloadsCardInfoPadH: 12px;
+downloadsCardInfoPadV: 10px;
+downloadsCardDocBoxSize: 52px;
+downloadsCardDocBoxRadius: 8px;
+downloadsCardDurationBadgeRadius: 4px;
+
+// Grid detail panel (right-hand inspector shown on card selection).
+downloadsDetailWidth: 260px;
+downloadsDetailHeaderHeight: 44px;
+downloadsDetailPadH: 16px;
+downloadsDetailAbbrevBoxSize: 52px;
+downloadsDetailAbbrevBoxRadius: 8px;
+downloadsDetailRowHeight: 28px;
+downloadsDetailButtonHeight: 38px;
+downloadsDetailButtonGap: 6px;
+downloadsDetailButtonRadius: 8px;
 
 downloadsBadgeFont: font(11px semibold);
 downloadsFileIconFont: font(9px semibold);
@@ -71,7 +106,7 @@ downloadsEmptySubtitle: FlatLabel(defaultFlatLabel) {
 }
 downloadsFooterCount: FlatLabel(defaultFlatLabel) {
 	style: defaultTextStyle;
-	textFg: windowSubTextFg;
+	textFg: windowFg;
 }
 
 downloadsColumnHeader: FlatLabel(defaultFlatLabel) {
