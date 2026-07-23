@@ -30,7 +30,7 @@ DownloadsWidget::DownloadsWidget(
 : SectionWidget(parent, controller) {
 	setAttribute(Qt::WA_OpaquePaintEvent);
 
-	_content = Ui::CreateChild<DownloadsContent>(this);
+	_content = Ui::CreateChild<DownloadsContent>(this, controller);
 	_content->setGeometry(rect());
 }
 

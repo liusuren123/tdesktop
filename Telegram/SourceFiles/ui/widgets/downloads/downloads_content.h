@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
+#include "base/required.h"
 #include "ui/widgets/downloads/downloads_row_delegate.h"
 #include "ui/widgets/downloads/downloads_sample.h"
 #include "rpl/lifetime.h"
@@ -17,8 +18,27 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QScrollArea>
 #include <QtWidgets/QTableView>
 #include <QtWidgets/QWidget>
+#include <map>
 #include <memory>
 #include <vector>
+
+namespace base {
+class Timer;
+} // namespace base
+
+namespace Main {
+class Session;
+} // namespace Main
+
+namespace Window {
+class SessionController;
+} // namespace Window
+
+namespace Data {
+class DownloadCenter;
+class DocumentMedia;
+struct DownloadTask;
+} // namespace Data
 
 namespace Ui {
 
@@ -41,7 +61,9 @@ class PopupMenu;
 // (DownloadsRowDelegate).
 class DownloadsContent : public QWidget {
 public:
-	DownloadsContent(QWidget *parent);
+	DownloadsContent(
+		QWidget *parent,
+		not_null<Window::SessionController*> controller);
 	~DownloadsContent() override;
 
 	void pauseAll();
@@ -77,6 +99,11 @@ private:
 	void setupTable(QHBoxLayout *content);
 	void setupGrid(QHBoxLayout *content);
 	void setupFooter(QVBoxLayout *root);
+
+	// Live backend binding.
+	void refreshFromBackend();
+	[[nodiscard]] Sample::Row buildUiTask(const Data::DownloadTask &task);
+	void scheduleRefresh();
 
 	void setViewMode(int toggleIndex);
 	void selectItem(int index);
@@ -125,6 +152,15 @@ private:
 	DownloadsDetailPanel *_detailPanel = nullptr;
 	int _viewMode = 1; // 0 = grid, 1 = list (matches the toggle)
 	int _selectedRow = -1; // index into the filtered model
+	uint64 _selectedId = 0; // backing DownloadTaskId (0 = none)
+
+	// Live download backend (per-session). Resolved once from the controller.
+	Main::Session *_session = nullptr;
+	Data::DownloadCenter *_dc = nullptr;
+	std::unique_ptr<base::Timer> _refreshTimer;
+	// Keeps DocumentMedia views alive per task so preview thumbnails load and
+	// stay cached across rebuilds. Keyed by DownloadTaskId.
+	std::map<uint64, std::shared_ptr<Data::DocumentMedia>> _documentMedia;
 
 	rpl::lifetime _lifetime;
 

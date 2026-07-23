@@ -7,7 +7,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/widgets/downloads/downloads_content.h"
 
+#include "base/timer.h"
+#include "data/data_download_center.h"
+#include "data/data_document.h"
+#include "data/data_document_media.h"
+#include "data/data_peer.h"
+#include "data/data_session.h"
 #include "lang/lang_keys.h"
+#include "main/main_session.h"
 #include "styles/style_chat.h" // popupMenuExpandedSeparator
 #include "styles/style_downloads_icons.h"
 #include "styles/style_widgets.h"
@@ -17,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/downloads/downloads_footer_bar.h"
 #include "ui/widgets/downloads/downloads_detail_panel.h"
 #include "ui/widgets/downloads/downloads_grid_view.h"
+#include "ui/widgets/downloads/downloads_kind.h"
 #include "ui/widgets/downloads/downloads_row_delegate.h"
 #include "ui/widgets/downloads/downloads_search.h"
 #include "ui/widgets/downloads/downloads_style.h"
@@ -25,8 +33,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/downloads/downloads_text_button.h"
 #include "ui/widgets/downloads/downloads_view_toggle_group.h"
 #include "styles/style_media_player.h" // mediaPlayerMenuCheck
-#include "ui/widgets/popup_menu.h"
+#include "ui/image/image.h"
+#include "ui/text/format_values.h" // FormatSizeText
+#include "window/window_session_controller.h"
 
+#include <QtCore/QDateTime>
 #include <QtGui/QMouseEvent>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QHeaderView>
@@ -40,6 +51,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace Ui {
 
+namespace {
+// Coalesce backend updates (progress ticks) into one refresh per window.
+constexpr auto kRefreshTimeoutMs = 100;
+} // namespace
+
 bool DownloadsContent::MatchPhoto(Sample::Kind k)   { return k == Sample::Kind::Photo; }
 bool DownloadsContent::MatchVideo(Sample::Kind k)   { return k == Sample::Kind::Video; }
 bool DownloadsContent::MatchFile(Sample::Kind k)    {
@@ -49,11 +65,13 @@ bool DownloadsContent::MatchMusic(Sample::Kind k)   { return k == Sample::Kind::
 bool DownloadsContent::MatchLink(Sample::Kind k)    { return k == Sample::Kind::Link; }
 bool DownloadsContent::MatchVoice(Sample::Kind k)   { return k == Sample::Kind::Voice; }
 
-DownloadsContent::DownloadsContent(QWidget *parent)
-: QWidget(parent) {
+DownloadsContent::DownloadsContent(
+		QWidget *parent,
+		not_null<Window::SessionController*> controller)
+: QWidget(parent)
+, _session(&controller->session())
+, _dc(&_session->downloadCenter()) {
 	setAttribute(Qt::WA_OpaquePaintEvent);
-
-	_rows = Sample::InitialRows();
 
 	_tabs = {
 		{ QString(), nullptr },
@@ -66,7 +84,21 @@ DownloadsContent::DownloadsContent(QWidget *parent)
 	};
 
 	setupUi();
-	rebuildModel();
+
+	// Coalesce high-frequency backend updates (e.g. progress ticks) into a
+	// single ~100 ms refresh so repaints stay bounded.
+	_refreshTimer = std::make_unique<base::Timer>([=] { refreshFromBackend(); });
+	const auto arm = [=] { scheduleRefresh(); };
+	_dc->taskAdded() | rpl::on_next(arm, _lifetime);
+	_dc->taskUpdated() | rpl::on_next(arm, _lifetime);
+	_dc->taskRemoved() | rpl::on_next(arm, _lifetime);
+	_dc->tasksReloaded() | rpl::on_next(arm, _lifetime);
+	// Preview thumbnails load asynchronously; refresh when any download
+	// (incl. thumbnail fetches) completes.
+	_session->downloaderTaskFinished()
+		| rpl::on_next(arm, _lifetime);
+
+	refreshFromBackend();
 }
 
 DownloadsContent::~DownloadsContent() = default;
@@ -374,7 +406,8 @@ void DownloadsContent::setupTable(QHBoxLayout *content) {
 		this, [this](int row, const QPoint &globalPos) {
 		auto *model = _model;
 		if (!model || row < 0 || row >= int(model->rows().size())) return;
-		const auto &sampleRow = model->rows()[row];
+		const auto id = model->rows()[row].taskId;
+		const auto state = model->rows()[row].state;
 
 		const auto guard = Ui::CreateChild<QWidget>(this);
 		guard->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -383,39 +416,29 @@ void DownloadsContent::setupTable(QHBoxLayout *content) {
 		auto menu = std::make_unique<Ui::PopupMenu>(
 			this, st::popupMenuExpandedSeparator);
 
-		switch (sampleRow.state) {
+		switch (state) {
 		case Sample::State::Downloading:
-			menu->addAction(tr::lng_downloads_menu_pause(tr::now), [this, row] {
-				auto &r = _model->rows()[row];
-				r.state = Sample::State::Paused;
-				rebuildModel();
-			});
+			menu->addAction(tr::lng_downloads_menu_pause(tr::now),
+				[this, id] { _dc->pause(id); });
 			break;
 		case Sample::State::Paused:
-			menu->addAction(tr::lng_downloads_menu_resume(tr::now), [this, row] {
-				auto &r = _model->rows()[row];
-				r.state = Sample::State::Downloading;
-				rebuildModel();
-			});
+			menu->addAction(tr::lng_downloads_menu_resume(tr::now),
+				[this, id] { _dc->resume(id); });
 			break;
 		case Sample::State::Failed:
-			menu->addAction(tr::lng_downloads_menu_retry(tr::now), [this, row] {
-				auto &r = _model->rows()[row];
-				r.state = Sample::State::Downloading;
-				rebuildModel();
-			});
+			menu->addAction(tr::lng_downloads_menu_retry(tr::now),
+				[this, id] { _dc->retry(id); });
 			break;
 		case Sample::State::Completed:
 			break;
 		}
-		menu->addAction(tr::lng_downloads_menu_open(tr::now), [] {});
-		menu->addAction(tr::lng_downloads_menu_show_in_folder(tr::now), [] {});
+		menu->addAction(tr::lng_downloads_menu_open(tr::now),
+			[this, id] { _dc->openFile(id); });
+		menu->addAction(tr::lng_downloads_menu_show_in_folder(tr::now),
+			[this, id] { _dc->showInFolder(id); });
 		menu->addAction(tr::lng_downloads_menu_copy_link(tr::now), [] {});
-		menu->addAction(tr::lng_downloads_menu_remove(tr::now), [this, row] {
-			auto &r = _model->rows()[row];
-			r.fileName.clear();
-			rebuildModel();
-		});
+		menu->addAction(tr::lng_downloads_menu_remove(tr::now),
+			[this, id] { _dc->removeToTrash(id); });
 
 		menu->popup(globalPos);
 	});
@@ -475,19 +498,31 @@ void DownloadsContent::setupGrid(QHBoxLayout *content) {
 		| rpl::on_next([this] { closeDetailPanel(); }, _lifetime);
 	_detailPanel->primaryClicks()
 		| rpl::on_next([this] {
-			if (_selectedRow < 0) return;
-			auto &r = _model->rows()[_selectedRow];
-			// Toggle pause/resume for the primary action.
-			r.state = (r.state == Sample::State::Downloading)
-				? Sample::State::Paused
-				: Sample::State::Downloading;
-			rebuildModel();
-			selectItem(_selectedRow);
+			if (_selectedId == 0 || !_dc) return;
+			const auto *t = _dc->task(_selectedId);
+			if (!t) return;
+			switch (t->state) {
+			case Data::DownloadState::Downloading:
+				_dc->pause(_selectedId);
+				break;
+			case Data::DownloadState::Paused:
+				_dc->resume(_selectedId);
+				break;
+			case Data::DownloadState::Failed:
+			case Data::DownloadState::Cancelled:
+				_dc->retry(_selectedId);
+				break;
+			case Data::DownloadState::Completed:
+				_dc->openFile(_selectedId);
+				break;
+			default:
+				break;
+			}
 		}, _lifetime);
 	_detailPanel->removeClicks()
 		| rpl::on_next([this] {
-			if (_selectedRow < 0) return;
-			onRowAction(_selectedRow, DownloadsRowDelegate::RemoveAction);
+			if (_selectedId == 0 || !_dc) return;
+			_dc->removeToTrash(_selectedId);
 			closeDetailPanel();
 		}, _lifetime);
 	_detailPanel->forwardClicks()
@@ -519,6 +554,7 @@ void DownloadsContent::selectItem(int index) {
 		return;
 	}
 	_selectedRow = index;
+	_selectedId = _model->rows()[index].taskId;
 	if (_gridView) _gridView->setSelectedIndex(index);
 	if (_delegate) _delegate->setSelectedRow(index);
 	if (_detailPanel) {
@@ -529,6 +565,7 @@ void DownloadsContent::selectItem(int index) {
 
 void DownloadsContent::closeDetailPanel() {
 	_selectedRow = -1;
+	_selectedId = 0;
 	if (_gridView) _gridView->setSelectedIndex(-1);
 	if (_delegate) _delegate->setSelectedRow(-1);
 	if (_detailPanel) _detailPanel->setVisible(false);
@@ -546,6 +583,133 @@ void DownloadsContent::setupFooter(QVBoxLayout *root) {
 	_footerBar->cancelAllClicks()
 		| rpl::on_next([this] { cancelAll(); }, _lifetime);
 	root->addWidget(_footerBar);
+}
+
+void DownloadsContent::scheduleRefresh() {
+	if (_refreshTimer) {
+		_refreshTimer->callOnce(kRefreshTimeoutMs);
+	}
+}
+
+Sample::Row DownloadsContent::buildUiTask(const Data::DownloadTask &t) {
+	auto r = Sample::Row();
+	r.taskId = t.id;
+	r.fileName = t.fileName;
+	r.sizeText = FormatSizeText(t.totalSize);
+	r.percent = (t.totalSize > 0)
+		? std::clamp(int(t.readySize * 100 / t.totalSize), 0, 100)
+		: 0;
+	const auto when = t.completedAt.isValid() ? t.completedAt : t.addedAt;
+	r.dateText = when.isValid()
+		? when.toString(u"MMM d, HH:mm"_q)
+		: QString();
+	switch (t.state) {
+	case Data::DownloadState::Queued:
+	case Data::DownloadState::Waiting:
+	case Data::DownloadState::Downloading:
+		r.state = Sample::State::Downloading;
+		break;
+	case Data::DownloadState::Paused:
+		r.state = Sample::State::Paused;
+		break;
+	case Data::DownloadState::Failed:
+	case Data::DownloadState::Cancelled:
+		r.state = Sample::State::Failed;
+		break;
+	case Data::DownloadState::Completed:
+	default:
+		r.state = Sample::State::Completed;
+		break;
+	}
+	// Infer media kind from source + mime type.
+	const auto &mime = t.mimeType;
+	if (t.source == Data::DownloadSource::Photo) {
+		r.kind = Sample::Kind::Photo;
+	} else if (mime.startsWith(u"image/"_q)) {
+		r.kind = Sample::Kind::Photo;
+	} else if (mime.startsWith(u"video/"_q)) {
+		r.kind = Sample::Kind::Video;
+	} else if (mime.startsWith(u"audio/"_q)) {
+		r.kind = mime.startsWith(u"audio/ogg"_q)
+			? Sample::Kind::Voice
+			: Sample::Kind::Audio;
+	} else if (t.source == Data::DownloadSource::Url) {
+		r.kind = Sample::Kind::Link;
+	} else if (mime.contains(u"zip"_q)
+		|| mime.contains(u"compressed"_q)
+		|| mime.contains(u"tar"_q)
+		|| mime.contains(u"gzip"_q)
+		|| mime.contains(u"7z"_q)) {
+		r.kind = Sample::Kind::Archive;
+	} else {
+		r.kind = Sample::Kind::Document;
+	}
+	r.context = t.errorMessage;
+	// Resolve the originating peer for the "From" row + the row caption.
+	// session->data() may not have the peer loaded yet; fall back to "—".
+	if (t.peerId) {
+		if (auto *peer = _session->data().peer(t.peerId).get()) {
+			r.chatName = peer->name();
+		}
+	}
+	if (r.chatName.isEmpty()) {
+		r.chatName = u"—"_q;
+	}
+	// Resolve a preview thumbnail for media (photos / video posters).
+	if (t.source == Data::DownloadSource::Document && t.documentId) {
+		auto *doc = _session->data().document(t.documentId).get();
+		auto &media = _documentMedia[t.id];
+		if (!media) {
+			media = doc->createMediaView();
+		}
+		if (doc->hasThumbnail()) {
+			media->thumbnailWanted(t.origin);
+		}
+		media->goodThumbnailWanted();
+		const auto pick = [](Image *image) -> QImage {
+			if (!image || image->isNull()) {
+				return QImage();
+			}
+			auto result = image->original();
+			// Cap stored size so per-frame paint scaling stays cheap.
+			const auto maxSide = 256;
+			if (result.width() > maxSide || result.height() > maxSide) {
+				result = result.scaled(
+					maxSide, maxSide,
+					Qt::KeepAspectRatio,
+					Qt::SmoothTransformation);
+			}
+			return result;
+		};
+		r.thumb = pick(media->thumbnail());
+		if (r.thumb.isNull()) {
+			r.thumb = pick(media->goodThumbnail());
+		}
+	}
+	return r;
+}
+
+void DownloadsContent::refreshFromBackend() {
+	if (!_dc) return;
+	std::vector<Sample::Row> rows;
+	std::set<uint64> alive;
+	for (const auto *task : _dc->tasks()) {
+		if (!task) continue;
+		// Removed/Cancelled live in the trash; hide from the main list.
+		if (task->state == Data::DownloadState::Removed) continue;
+		alive.insert(task->id);
+		rows.push_back(buildUiTask(*task));
+	}
+	// Drop media views for tasks that are no longer present.
+	for (auto it = _documentMedia.begin(); it != _documentMedia.end();) {
+		if (alive.count(it->first)) {
+			++it;
+		} else {
+			it = _documentMedia.erase(it);
+		}
+	}
+	_rows = std::move(rows);
+	rebuildModel();
 }
 
 void DownloadsContent::rebuildModel() {
@@ -583,9 +747,28 @@ void DownloadsContent::rebuildModel() {
 	if (_gridView) {
 		_gridView->setRows(_model->rows());
 	}
-	// A tab/search/sort change can invalidate the selected row.
-	if (_selectedRow >= int(_model->rows().size())) {
-		closeDetailPanel();
+	// Selection is id-based: re-resolve to the (possibly new) row index so it
+	// survives inserts/removes/reorders. Drop it if the task is gone.
+	if (_selectedId != 0) {
+		auto newIndex = -1;
+		const auto &rows = _model->rows();
+		for (auto i = 0; i < int(rows.size()); ++i) {
+			if (rows[i].taskId == _selectedId) {
+				newIndex = i;
+				break;
+			}
+		}
+		if (newIndex < 0) {
+			closeDetailPanel();
+		} else if (newIndex != _selectedRow) {
+			_selectedRow = newIndex;
+			if (_gridView) _gridView->setSelectedIndex(newIndex);
+			if (_delegate) _delegate->setSelectedRow(newIndex);
+		}
+		// Keep the panel's content fresh (progress/state may have changed).
+		if (_detailPanel && _detailPanel->isVisible() && newIndex >= 0) {
+			_detailPanel->setRow(rows[newIndex]);
+		}
 	}
 	// Row indices shift on filter/sort, so the cached hover is stale.
 	if (_delegate) _delegate->setHoveredRow(-1);
@@ -700,37 +883,35 @@ void DownloadsContent::showSortMenu() {
 }
 
 void DownloadsContent::pauseAll() {
-	for (auto &row : _rows) {
-		if (row.state == Sample::State::Downloading) {
-			row.state = Sample::State::Paused;
+	if (!_dc) return;
+	for (const auto *t : _dc->tasks()) {
+		if (t && t->state == Data::DownloadState::Downloading) {
+			_dc->pause(t->id);
 		}
 	}
-	rebuildModel();
 }
 
 void DownloadsContent::cancelAll() {
-	for (auto &row : _rows) {
-		if (row.state == Sample::State::Downloading) {
-			row.state = Sample::State::Completed;
-			row.percent = 100;
+	if (!_dc) return;
+	for (const auto *t : _dc->tasks()) {
+		if (t && t->state == Data::DownloadState::Downloading) {
+			_dc->cancel(t->id);
 		}
 	}
-	rebuildModel();
 }
 
 void DownloadsContent::onRowAction(int row, DownloadsRowDelegate::ActionHit action) {
-	if (!_model || row < 0 || row >= int(_model->rows().size())) return;
-	auto &r = _model->rows()[row];
+	if (!_model || !_dc || row < 0 || row >= int(_model->rows().size())) return;
+	const auto id = _model->rows()[row].taskId;
 	switch (action) {
 	case DownloadsRowDelegate::SaveAction:
-		// Placeholder: would trigger "save to disk" flow.
+		_dc->openFile(id);
 		break;
 	case DownloadsRowDelegate::FolderAction:
-		// Placeholder: would reveal file in OS file manager.
+		_dc->showInFolder(id);
 		break;
 	case DownloadsRowDelegate::RemoveAction:
-		r.fileName.clear();
-		rebuildModel();
+		_dc->removeToTrash(id);
 		break;
 	case DownloadsRowDelegate::NoAction:
 		break;

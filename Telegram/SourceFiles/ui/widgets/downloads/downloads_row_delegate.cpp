@@ -183,7 +183,33 @@ void DownloadsRowDelegate::paintThumbnail(
 	};
 
 	if (row.kind == Sample::Kind::Photo || row.kind == Sample::Kind::Video) {
-		painter->fillPath(path(r), DownloadsStyle::thumbnailPlaceholder());
+		// Real preview when the backend has resolved a thumbnail for this task;
+		// otherwise fall back to the subtle placeholder fill + (for video) the
+		// play overlay.
+		if (!row.thumb.isNull()) {
+			painter->setClipPath(path(r));
+			painter->setRenderHint(QPainter::SmoothPixmapTransform);
+			const auto imgSize = row.thumb.size();
+			const auto scale = std::max(
+				qreal(r.width()) / imgSize.width(),
+				qreal(r.height()) / imgSize.height());
+			const auto scaledW = imgSize.width() * scale;
+			const auto scaledH = imgSize.height() * scale;
+			const auto srcRect = QRectF(
+				(imgSize.width() - r.width() / scale) / 2.0,
+				(imgSize.height() - r.height() / scale) / 2.0,
+				r.width() / scale,
+				r.height() / scale);
+			const auto dstRect = QRectF(
+				r.x() + (r.width() - scaledW) / 2.0,
+				r.y() + (r.height() - scaledH) / 2.0,
+				scaledW,
+				scaledH);
+			painter->drawImage(dstRect, row.thumb, srcRect);
+			painter->setClipping(false);
+		} else {
+			painter->fillPath(path(r), DownloadsStyle::thumbnailPlaceholder());
+		}
 		if (row.isPlaying) {
 			painter->fillPath(path(r), DownloadsStyle::playingOverlay());
 			const auto cx = r.width() / 2.0;

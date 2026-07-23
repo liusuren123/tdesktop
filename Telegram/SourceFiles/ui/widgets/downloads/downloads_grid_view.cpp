@@ -298,8 +298,30 @@ void DownloadsGridView::paintThumbnail(
 		|| row.kind == Sample::Kind::Video;
 
 	if (isMedia) {
-		// Placeholder fill (no real preview assets in this demo).
-		p->fillRect(thumb, DownloadsStyle::thumbnailPlaceholder());
+		// Real preview when the backend has resolved a thumbnail for this
+		// task; otherwise fall back to a subtle placeholder + duration badge.
+		if (!row.thumb.isNull()) {
+			p->setRenderHint(QPainter::SmoothPixmapTransform);
+			const auto imgSize = row.thumb.size();
+			const auto scale = std::max(
+				qreal(thumb.width()) / imgSize.width(),
+				qreal(thumb.height()) / imgSize.height());
+			const auto scaledW = imgSize.width() * scale;
+			const auto scaledH = imgSize.height() * scale;
+			const auto srcRect = QRectF(
+				(imgSize.width() - thumb.width() / scale) / 2.0,
+				(imgSize.height() - thumb.height() / scale) / 2.0,
+				thumb.width() / scale,
+				thumb.height() / scale);
+			const auto dstRect = QRectF(
+				thumb.x() + (thumb.width() - scaledW) / 2.0,
+				thumb.y() + (thumb.height() - scaledH) / 2.0,
+				scaledW,
+				scaledH);
+			p->drawImage(dstRect, row.thumb, srcRect);
+		} else {
+			p->fillRect(thumb, DownloadsStyle::thumbnailPlaceholder());
+		}
 
 		// Duration badge for videos, bottom-right.
 		if (row.kind == Sample::Kind::Video) {
